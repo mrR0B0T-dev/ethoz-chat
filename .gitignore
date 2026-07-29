@@ -1,0 +1,25 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.pub-cache/
+
+# Node
+node_modules/
+dist/
+
+# Laravel / PHP
+/vendor/
+.env
+.env.*
+!.env.example
+storage/*.key
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
