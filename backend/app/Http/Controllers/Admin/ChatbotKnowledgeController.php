@@ -38,7 +38,9 @@ class ChatbotKnowledgeController extends Controller
     {
         return $r->validate([
             'title' => 'required|string|max:120',
-            'content' => 'required|string|max:5000',
+            // Batas lama 5.000 karakter membuat entri hasil unggahan dokumen
+            // tidak bisa disunting ulang — dokumen wajar saja melampauinya.
+            'content' => 'required|string|max:'.config('chatbot.content_max_chars'),
             'scope' => 'required|in:all,hr,manager,hr_manager',
             'is_active' => 'boolean',
         ]);

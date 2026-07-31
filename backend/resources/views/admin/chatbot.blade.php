@@ -9,38 +9,38 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="theme-color" content="#031334">
+    <meta name="theme-color" content="#062A52">
     <title>Konsol Admin — Ethoz Chat</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
         /* ── Token merek Ethoz ─────────────────────────────────────── */
         :root {
-            --navy: #031334;
-            --blue: #004A7B;
-            --teal: #00796E;
-            --accTeal: #00A88F;
-            --mint: #00F6A5;
-            --ink: #0B1B2B;
-            --muted: #6B7B87;
-            --line: #E6EFEC;
-            --soft: #F3F8F7;
-            --field: #F8FBFA;
+            --navy: #062A52;
+            --blue: #0F5AA8;
+            --azure: #1E7BD6;
+            --accent: #2E90E4;
+            --sky: #63BDF5;
+            --ink: #0A1A2B;
+            --muted: #6B7E92;
+            --line: #E3ECF5;
+            --soft: #F1F6FC;
+            --field: #F7FAFE;
             --danger: #C0554F;
 
-            --grad-brand: linear-gradient(120deg, #031334 0%, #004A7B 60%, #00796E 100%);
-            --grad-accent: linear-gradient(135deg, #00A88F, #004A7B);
-            --grad-mint: linear-gradient(135deg, #00F6A5, #00A88F);
+            --grad-brand: linear-gradient(120deg, #062A52 0%, #0F5AA8 60%, #1E7BD6 100%);
+            --grad-accent: linear-gradient(135deg, #2E90E4, #0F5AA8);
+            --grad-sky: linear-gradient(135deg, #63BDF5, #2E90E4);
 
             --r-sm: 9px;
             --r-md: 12px;
             --r-lg: 14px;
             --r-xl: 18px;
 
-            --sh-card: 0 6px 18px rgba(3, 19, 52, .05);
-            --sh-lift: 0 10px 26px rgba(3, 19, 52, .09);
-            --sh-bar: 0 6px 20px rgba(3, 19, 52, .18);
-            --ring: 0 0 0 3px rgba(0, 168, 143, .18);
+            --sh-card: 0 6px 18px rgba(6, 42, 82, .05);
+            --sh-lift: 0 10px 26px rgba(6, 42, 82, .09);
+            --sh-bar: 0 6px 20px rgba(6, 42, 82, .18);
+            --ring: 0 0 0 3px rgba(46, 144, 228, .18);
 
             --ease: cubic-bezier(.22, .61, .36, 1);
         }
@@ -57,7 +57,7 @@
             margin: 0;
             min-height: 100vh;
             padding-bottom: 60px;
-            background: linear-gradient(165deg, #E9F6F3 0%, #F4FAF9 55%, #EAF4FB 100%) fixed;
+            background: linear-gradient(165deg, #E8F2FD 0%, #F2F8FE 55%, #E9F1FB 100%) fixed;
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             color: var(--ink);
             -webkit-font-smoothing: antialiased;
@@ -94,8 +94,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: var(--grad-mint);
-            box-shadow: 0 4px 14px rgba(0, 246, 165, .35);
+            background: var(--grad-sky);
+            box-shadow: 0 4px 14px rgba(99, 189, 245, .35);
         }
 
         .brand h1 {
@@ -122,8 +122,41 @@
             height: 7px;
             flex: 0 0 auto;
             border-radius: 50%;
-            background: var(--mint);
-            box-shadow: 0 0 8px var(--mint);
+            background: var(--sky);
+            box-shadow: 0 0 8px var(--sky);
+        }
+
+        /* Perpindahan antar halaman admin — mengikuti pola segmented control
+           pada prototipe web Ethoz. */
+        .seg {
+            display: flex;
+            background: rgba(255, 255, 255, .14);
+            border-radius: var(--r-md);
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .seg a {
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, .85);
+            font: 600 13.5px 'Inter', sans-serif;
+            padding: 7px 14px;
+            border-radius: var(--r-sm);
+            cursor: pointer;
+            text-decoration: none;
+            transition: all .15s var(--ease);
+        }
+
+        .seg a:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, .12);
+        }
+
+        .seg a.on {
+            background: #fff;
+            color: var(--navy);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
         }
 
         .bar-actions {
@@ -139,7 +172,10 @@
             gap: 7px;
             padding: 6px 12px 6px 7px;
             border-radius: 999px;
-            background: rgba(255, 255, 255, .12);
+            /* Kaca buram di atas biru — mengikuti kartu presensi Ethoz. */
+            background: rgba(255, 255, 255, .18);
+            border: 1px solid rgba(255, 255, 255, .28);
+            backdrop-filter: blur(6px);
             font-size: 12.5px;
             font-weight: 500;
             white-space: nowrap;
@@ -152,7 +188,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: var(--grad-mint);
+            background: var(--grad-sky);
             color: var(--navy);
             font-size: 11px;
             font-weight: 700;
@@ -176,7 +212,7 @@
             background: #fff;
             border-radius: var(--r-xl);
             padding: 18px;
-            border: 1px solid rgba(3, 19, 52, .06);
+            border: 1px solid rgba(6, 42, 82, .06);
             box-shadow: var(--sh-card);
             transition: box-shadow .22s var(--ease), transform .22s var(--ease);
         }
@@ -202,7 +238,7 @@
             width: 4px;
             height: 17px;
             border-radius: 999px;
-            background: var(--grad-mint);
+            background: var(--grad-sky);
             flex: 0 0 auto;
         }
 
@@ -236,23 +272,23 @@
             color: var(--ink);
             padding: 10px 12px;
             border-radius: 11px;
-            border: 1px solid #DDE8E5;
+            border: 1px solid #D7E3F2;
             outline: none;
             background: #fff;
             transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
         }
 
         .in:hover:not(:focus) {
-            border-color: #C6DBD5
+            border-color: #BFD5EC
         }
 
         .in:focus {
-            border-color: var(--accTeal);
+            border-color: var(--accent);
             box-shadow: var(--ring);
         }
 
         .in::placeholder {
-            color: #A9B9C1
+            color: #A3B4C6
         }
 
         select.in {
@@ -294,7 +330,7 @@
         }
 
         .toggle:hover span:first-child {
-            color: var(--teal)
+            color: var(--azure)
         }
 
         .toggle span {
@@ -322,7 +358,7 @@
             position: absolute;
             inset: 0;
             border-radius: 999px;
-            background: #CBD8D4;
+            background: #C7D5E4;
             transition: background .18s var(--ease);
             pointer-events: none;
         }
@@ -340,7 +376,7 @@
         }
 
         .sw input:checked+.tr {
-            background: var(--accTeal)
+            background: var(--accent)
         }
 
         .sw input:checked+.tr .kn {
@@ -367,7 +403,7 @@
 
         .btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(0, 74, 123, .28);
+            box-shadow: 0 6px 16px rgba(15, 90, 168, .28);
         }
 
         .btn:active {
@@ -380,24 +416,25 @@
         }
 
         .btn.ghost {
-            background: rgba(255, 255, 255, .14);
-            border: 1px solid rgba(255, 255, 255, .22);
-            backdrop-filter: blur(4px);
+            background: rgba(255, 255, 255, .18);
+            border: 1px solid rgba(255, 255, 255, .30);
+            backdrop-filter: blur(6px);
         }
 
         .btn.ghost:hover {
-            background: rgba(255, 255, 255, .22);
+            background: rgba(255, 255, 255, .28);
             box-shadow: none;
         }
 
         .btn.quiet {
-            background: transparent;
-            border: 1px solid rgba(255, 255, 255, .22);
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid rgba(255, 255, 255, .24);
+            backdrop-filter: blur(6px);
             font-weight: 500;
         }
 
         .btn.quiet:hover {
-            background: rgba(255, 255, 255, .12);
+            background: rgba(255, 255, 255, .16);
             box-shadow: none;
         }
 
@@ -409,12 +446,12 @@
         }
 
         :focus-visible {
-            outline: 2px solid var(--accTeal);
+            outline: 2px solid var(--accent);
             outline-offset: 2px;
         }
 
         .topbar :focus-visible {
-            outline-color: var(--mint)
+            outline-color: var(--sky)
         }
 
         /* ── Unggah dokumen ────────────────────────────────────────── */
@@ -425,28 +462,28 @@
             text-align: center;
             padding: 22px 16px;
             border-radius: var(--r-lg);
-            border: 1.8px dashed #B7DED5;
-            background: #F1FAF7;
+            border: 1.8px dashed #AFD2F0;
+            background: #EFF7FE;
             cursor: pointer;
             transition: background .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
         }
 
         .dropzone:hover,
         .dropzone.over {
-            background: #E7F6F1;
-            border-color: #8FCBBD;
+            background: #E2F0FD;
+            border-color: #84BEEC;
         }
 
         .dropzone.over {
             transform: scale(1.01);
-            border-color: var(--accTeal);
+            border-color: var(--accent);
         }
 
         .dropIcon {
             width: 42px;
             height: 42px;
             border-radius: var(--r-md);
-            background: #DFF3EC;
+            background: #DAEDFC;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -463,13 +500,13 @@
             background: var(--field);
             border-radius: 13px;
             padding: 12px;
-            border: 1px solid #E4EEEB;
+            border: 1px solid #DEE9F5;
             margin-top: 12px;
             transition: border-color .18s var(--ease), background .18s var(--ease);
         }
 
         .kb:hover {
-            border-color: #CFE4DE
+            border-color: #C8DCEF
         }
 
         .kb-head {
@@ -494,7 +531,7 @@
 
         .badge.man {
             color: var(--muted);
-            background: #EAF0EE;
+            background: #E6EDF5;
         }
 
         .del {
@@ -518,9 +555,9 @@
             width: 100%;
             padding: 12px;
             border-radius: var(--r-md);
-            border: 1.5px dashed #B7DED5;
-            background: #F1FAF7;
-            color: var(--teal);
+            border: 1.5px dashed #AFD2F0;
+            background: #EFF7FE;
+            color: var(--azure);
             font-weight: 600;
             font-size: 13.5px;
             cursor: pointer;
@@ -529,8 +566,26 @@
         }
 
         .add:hover {
-            background: #E7F6F1;
-            border-color: #8FCBBD;
+            background: #E2F0FD;
+            border-color: #84BEEC;
+        }
+
+        /* Kerangka muat — kartu tidak lagi tampak kosong/rusak selagi memuat. */
+        .skel {
+            border-radius: 8px;
+            background: linear-gradient(90deg, var(--soft) 25%, #E8F1FB 37%, var(--soft) 63%);
+            background-size: 400% 100%;
+            animation: shimmer 1.4s ease infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 100% 0 }
+            100% { background-position: 0 0 }
+        }
+
+        .skel-row {
+            height: 38px;
+            margin-top: 10px;
         }
 
         /* Kondisi kosong — jangan biarkan kartu terasa "rusak" saat belum ada isi. */
@@ -550,7 +605,7 @@
         pre.out {
             margin: 10px 0 0;
             background: var(--navy);
-            color: #CFF7EE;
+            color: #CFE6FF;
             padding: 14px;
             border-radius: var(--r-md);
             font-size: 11.5px;
@@ -563,7 +618,7 @@
         }
 
         pre.out.idle {
-            color: #7F98A4
+            color: #7C97B4
         }
 
         /* ── Toast ─────────────────────────────────────────────────── */
@@ -578,7 +633,7 @@
             padding: 11px 18px;
             border-radius: var(--r-md);
             font-size: 13.5px;
-            box-shadow: 0 8px 24px rgba(3, 19, 52, .3);
+            box-shadow: 0 8px 24px rgba(6, 42, 82, .3);
             transition: opacity .25s var(--ease), transform .25s var(--ease);
             pointer-events: none;
             z-index: 20;
@@ -638,7 +693,7 @@
         <div class="brand">
             <div class="dot">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M13 6.4l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z" fill="#031334" />
+                    <path d="M13 6.4l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z" fill="#062A52" />
                 </svg>
             </div>
             <div>
@@ -646,6 +701,11 @@
                 <div class="sub"><span class="live"></span><span id="brandSub">Konsol Admin</span></div>
             </div>
         </div>
+
+        <nav class="seg">
+            <a href="{{ route('admin.chatbot') }}" class="on" aria-current="page">Konsol</a>
+            <a href="{{ route('admin.chatbot.monitor') }}">Pemantauan</a>
+        </nav>
 
         <div class="bar-actions">
             <span class="who" title="{{ auth()->user()->email }}">
@@ -671,7 +731,7 @@
             <input class="in" id="f_company" placeholder="PT Bumi Daya Plaza">
             <label class="lbl" for="f_role">Peran / deskripsi singkat</label>
             <textarea class="in" id="f_role" rows="2"
-                placeholder="mis. Asisten HR &amp; informasi perusahaan untuk pegawai PT Bumi Daya Plaza."></textarea>
+                placeholder="mis. Asisten HC &amp; informasi perusahaan untuk pegawai PT Bumi Daya Plaza."></textarea>
         </section>
 
         <!-- Basis Pengetahuan -->
@@ -684,24 +744,28 @@
                 <span class="muted small">Akses dokumen yang diunggah:</span>
                 <select class="in" id="upScope" style="width:auto">
                     <option value="all">Semua pegawai</option>
-                    <option value="hr">HR saja</option>
+                    <option value="hr">HC saja</option>
                     <option value="manager">Manager saja</option>
-                    <option value="hr_manager">HR &amp; Manager</option>
+                    <option value="hr_manager">HC &amp; Manager</option>
                 </select>
             </div>
 
-            <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md" multiple style="display:none">
+            <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+                multiple style="display:none">
             <div class="dropzone" id="dropzone" role="button" tabindex="0">
                 <div class="dropIcon">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M12 16V5m0 0L8 9m4-4 4 4" stroke="#00796E" stroke-width="1.9" stroke-linecap="round"
+                        <path d="M12 16V5m0 0L8 9m4-4 4 4" stroke="#1E7BD6" stroke-width="1.9" stroke-linecap="round"
                             stroke-linejoin="round" />
-                        <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="#00796E" stroke-width="1.9"
+                        <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke="#1E7BD6" stroke-width="1.9"
                             stroke-linecap="round" />
                     </svg>
                 </div>
                 <div style="font-weight:600;font-size:13.5px;color:var(--navy)">Unggah dokumen</div>
-                <div class="muted small" style="margin-top:3px">Klik atau seret ke sini · PDF, DOCX, TXT, MD</div>
+                <div class="muted small" style="margin-top:3px">Klik atau seret ke sini · PDF, DOCX, TXT, MD, CSV, gambar
+                </div>
+                <div class="muted small" style="margin-top:2px">Tabel ikut terbaca. Dokumen hasil pindai dibaca lewat OCR.
+                </div>
             </div>
 
             <div id="kbList"></div>
@@ -770,7 +834,7 @@
                 <span class="muted small">Lihat sebagai peran:</span>
                 <select class="in" id="pvRole" style="width:auto">
                     <option value="staff">Staff / Pegawai</option>
-                    <option value="hr">HR</option>
+                    <option value="hr">HC</option>
                     <option value="manager">Manager</option>
                 </select>
                 <button class="btn sm" id="pvBtn">Muat pratinjau</button>
@@ -798,7 +862,7 @@
             },
             {
                 id: 'hr',
-                label: 'HR saja'
+                label: 'HC saja'
             },
             {
                 id: 'manager',
@@ -806,7 +870,7 @@
             },
             {
                 id: 'hr_manager',
-                label: 'HR & Manager'
+                label: 'HC & Manager'
             }
         ];
         let KB = [];
@@ -924,6 +988,11 @@
                 '<span class="badge doc">Dokumen</span>' : '<span class="badge man">Manual</span>';
         }
 
+        function skeleton(rows = 3) {
+            return '<div>' + Array.from({ length: rows },
+                () => '<div class="skel skel-row"></div>').join('') + '</div>';
+        }
+
         function renderKB() {
             const list = document.getElementById('kbList');
             if (!KB.length) {
@@ -1022,8 +1091,14 @@
                     } catch (e) {}
                     throw new Error(m);
                 }
+                let created = {};
+                try {
+                    created = await res.json();
+                } catch (e) {}
                 await loadKnowledge();
-                toast(file.name + ' ditambahkan');
+                // Berkas tetap tersimpan, tapi ada bagian yang mungkin belum terbaca.
+                if (created.notice) toast(created.notice, false);
+                else toast(`${file.name} ditambahkan · ${created.char_count ?? 0} karakter`);
             } catch (err) {
                 toast('Gagal unggah: ' + shorten(err.message), false);
             }
@@ -1049,6 +1124,15 @@
 
         // ---- Wiring ----
         document.getElementById('saveSettings').addEventListener('click', saveSettings);
+
+        // Ctrl/Cmd+S menyimpan pengaturan — kebiasaan yang diharapkan di konsol
+        // yang banyak diisi dengan mengetik.
+        addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                document.getElementById('saveSettings').click();
+            }
+        });
         document.getElementById('addManual').addEventListener('click', () => {
             KB.push({
                 id: null,
@@ -1096,6 +1180,7 @@
         });
         document.getElementById('pvBtn').addEventListener('click', preview);
 
+        document.getElementById('kbList').innerHTML = skeleton();
         loadSettings();
         loadKnowledge();
     </script>

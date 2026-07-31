@@ -86,10 +86,14 @@ class ChatbotTest extends TestCase
 
     public function test_staff_tidak_menerima_pengetahuan_khusus_hr(): void
     {
+        // Uji ini memusatkan perhatian pada penyaringan PERAN, jadi retrieval
+        // dimatikan agar seluruh pengetahuan yang boleh diakses ikut terkirim.
+        // Penyaringan peran saat retrieval aktif diuji terpisah di RetrievalTest.
+        config(['chatbot.retrieval.enabled' => false]);
         $this->fakeClaude();
 
         ChatbotKnowledge::create(['title' => 'Jatah Cuti', 'content' => 'Cuti 12 hari.', 'scope' => 'all']);
-        ChatbotKnowledge::create(['title' => 'Rahasia HR', 'content' => 'Struktur gaji internal.', 'scope' => 'hr']);
+        ChatbotKnowledge::create(['title' => 'Rahasia HC', 'content' => 'Struktur gaji internal.', 'scope' => 'hr']);
         ChatbotKnowledge::create(['title' => 'Untuk Atasan', 'content' => 'Panduan approval.', 'scope' => 'hr_manager']);
 
         $this->actingAs(User::factory()->create(['role' => 'staff']))
@@ -105,9 +109,11 @@ class ChatbotTest extends TestCase
 
     public function test_hr_menerima_pengetahuan_hr_dan_hr_manager(): void
     {
+        // Sama seperti di atas: yang diuji cakupan peran, bukan pencarian.
+        config(['chatbot.retrieval.enabled' => false]);
         $this->fakeClaude();
 
-        ChatbotKnowledge::create(['title' => 'Rahasia HR', 'content' => 'Struktur gaji internal.', 'scope' => 'hr']);
+        ChatbotKnowledge::create(['title' => 'Rahasia HC', 'content' => 'Struktur gaji internal.', 'scope' => 'hr']);
         ChatbotKnowledge::create(['title' => 'Untuk Atasan', 'content' => 'Panduan approval.', 'scope' => 'hr_manager']);
 
         $this->actingAs(User::factory()->create(['role' => 'hr']))

@@ -169,16 +169,18 @@ class ChatbotAdminTest extends TestCase
                 'scope' => 'all',
             ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Teks tidak terbaca dari dokumen (mungkin PDF hasil scan). Coba OCR atau input manual.');
+            ->assertJsonPath('message', 'Tidak ada teks yang bisa dibaca dari berkas ini.');
 
         $this->assertDatabaseCount('chatbot_knowledge', 0);
     }
 
     public function test_unggah_menolak_tipe_berkas_lain(): void
     {
+        // Gambar kini JUSTRU didukung (dibaca lewat OCR), jadi penolakan tipe
+        // diuji dengan format yang memang tidak bisa diekstraksi.
         $this->actingAs($this->admin())
             ->post('/api/admin/chatbot/documents', [
-                'file' => UploadedFile::fake()->create('gambar.png', 10, 'image/png'),
+                'file' => UploadedFile::fake()->create('arsip.zip', 10, 'application/zip'),
                 'scope' => 'all',
             ])
             ->assertJsonValidationErrors('file');
@@ -203,9 +205,9 @@ class ChatbotAdminTest extends TestCase
     public function test_pratinjau_menampilkan_system_prompt_sesuai_peran(): void
     {
         ChatbotKnowledge::create(['title' => 'Umum', 'content' => 'Cuti 12 hari.', 'scope' => 'all']);
-        ChatbotKnowledge::create(['title' => 'Rahasia HR', 'content' => 'Struktur gaji internal.', 'scope' => 'hr']);
+        ChatbotKnowledge::create(['title' => 'Rahasia HC', 'content' => 'Struktur gaji internal.', 'scope' => 'hr']);
 
-        // Peran bawaan (staff) tidak melihat pengetahuan khusus HR.
+        // Peran bawaan (staff) tidak melihat pengetahuan khusus HC.
         $staffPrompt = $this->actingAs($this->admin())
             ->getJson('/api/admin/chatbot/preview')
             ->assertOk()
@@ -215,7 +217,7 @@ class ChatbotAdminTest extends TestCase
         $this->assertStringContainsString('Cuti 12 hari.', $staffPrompt);
         $this->assertStringNotContainsString('Struktur gaji internal.', $staffPrompt);
 
-        // Peran HR melihat keduanya.
+        // Peran HC melihat keduanya.
         $hrPrompt = $this->actingAs($this->admin())
             ->getJson('/api/admin/chatbot/preview?role=hr')
             ->assertOk()
@@ -272,11 +274,14 @@ class ChatbotAdminTest extends TestCase
 
     public function test_pengetahuan_kosong_diberi_penanda(): void
     {
-        ChatbotKnowledge::create(['title' => 'HR only', 'content' => 'rahasia', 'scope' => 'hr']);
+        ChatbotKnowledge::create(['title' => 'HC only', 'content' => 'rahasia', 'scope' => 'hr']);
 
         $prompt = app(ChatbotService::class)
             ->buildSystemPrompt(User::factory()->create(['role' => 'staff']));
 
-        $this->assertStringContainsString('(Tidak ada informasi yang tersedia untuk peran ini.)', $prompt);
+        $this->assertStringContainsString('Tidak ada bahan untuk pertanyaan ini', $prompt);
+        // Penanda lama menyebut "peran ini", yang sempat ditiru model menjadi
+        // keterangan hak akses di dalam jawaban ke pegawai.
+        $this->assertStringNotContainsString('tersedia untuk peran ini', $prompt);
     }
 }

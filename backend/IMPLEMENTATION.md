@@ -1,4 +1,4 @@
-# Backend Laravel — Asisten Ethoz
+# Backend Laravel — Ethoz Chat
 
 Panduan implementasi backend agar chatbot bisa dipakai pegawai **cukup dengan login Ethoz**, tanpa akun AI apa pun. API key rahasia perusahaan tersimpan di server dan tidak pernah dikirim ke aplikasi pegawai.
 
@@ -49,7 +49,7 @@ public function up(): void
     // Pengaturan bot — satu baris konfigurasi
     Schema::create('chatbot_settings', function (Blueprint $t) {
         $t->id();
-        $t->string('bot_name')->default('Asisten Ethoz');
+        $t->string('bot_name')->default('Ethoz Chat');
         $t->string('company')->default('PT BDP');
         $t->text('role')->nullable();
         $t->string('tone')->default('ramah');        // formal | ramah | santai
@@ -152,7 +152,7 @@ class ChatbotService
         $cfg  = ChatbotSetting::current();
         $role = $this->roleOf($user);
 
-        $roleLabel = ['staff' => 'Staff/Pegawai', 'hr' => 'HR', 'manager' => 'Manager'][$role] ?? 'Pegawai';
+        $roleLabel = ['staff' => 'Staff/Pegawai', 'hr' => 'HC', 'manager' => 'Manager'][$role] ?? 'Pegawai';
 
         $allowed = ChatbotKnowledge::where('is_active', true)->get()
             ->filter(fn ($k) => $this->scopeAllows($k->scope, $role));
@@ -194,9 +194,9 @@ class ChatbotService
         $L[] = "";
         $L[] = "BATASAN:";
         if ($cfg->no_hallucination)
-            $L[] = "- Jangan mengarang informasi yang tidak ada di BASIS PENGETAHUAN. Jika tidak tahu, arahkan ke HR/atasan.";
+            $L[] = "- Jangan mengarang informasi yang tidak ada di BASIS PENGETAHUAN. Jika tidak tahu, arahkan ke HC/atasan.";
         if ($cfg->protect_sensitive)
-            $L[] = "- Jangan menampilkan data pribadi sensitif (gaji spesifik, NIK, data medis). Arahkan ke kanal resmi HR.";
+            $L[] = "- Jangan menampilkan data pribadi sensitif (gaji spesifik, NIK, data medis). Arahkan ke kanal resmi HC.";
         $L[] = "- Hanya jawab berdasarkan informasi yang tersedia untuk peran pengguna ini.";
         $blocked = collect(preg_split('/[\n,]+/', $cfg->blocked_topics ?? ''))
             ->map(fn ($s) => trim($s))->filter()->values();
@@ -404,7 +404,7 @@ Untuk aplikasi mobile, gunakan **Laravel Sanctum**: token yang sama untuk login 
 
 - **API key hanya di server** (`.env`). Jangan pernah menaruhnya di kode frontend atau aplikasi mobile.
 - **`throttle:30,1`** membatasi 30 permintaan/menit per pegawai — cegah spam & lonjakan tagihan.
-- **Filter peran** di `ChatbotService` memastikan pegawai biasa tidak bisa memancing info khusus HR/Manager, karena info itu tidak ikut dikirim ke AI.
+- **Filter peran** di `ChatbotService` memastikan pegawai biasa tidak bisa memancing info khusus HC/Manager, karena info itu tidak ikut dikirim ke AI.
 - **Biaya per token** — untuk menghemat, pakai model Haiku dan batasi `max_tokens`. Simpan log pemakaian bila perlu memantau biaya.
 - **Data real-time** (mis. sisa cuti pribadi) sebaiknya diarahkan lewat pemanggilan API internal Ethoz, bukan ditaruh di prompt — bisa ditambahkan sebagai langkah berikutnya (tool/function calling).
 
@@ -434,6 +434,50 @@ public function up(): void
 composer require smalot/pdfparser   # PDF
 composer require phpoffice/phpword  # DOCX
 ```
+
+#### Kemampuan ekstraksi saat ini
+
+| Isi dokumen | Status | Catatan |
+|---|---|---|
+| Paragraf & daftar berpoin | ✅ | Satu paragraf tetap satu baris walau banyak gaya huruf |
+| **Tabel Word** | ✅ | Ditulis sebagai `\| sel \| sel \|` agar hubungan antar kolom terbaca |
+| Kop & kaki halaman | ✅ | Kerap memuat nomor memo dan unit kerja |
+| Karakter khusus (`&`, `<`) | ✅ | Entitas XML dikembalikan ke bentuk aslinya |
+| PDF ber-teks | ✅ | Diberi penanda `[Halaman n]` |
+| **PDF hasil pindai / gambar** | ⚠️ | Perlu OCR — lihat di bawah |
+| DOCX dengan XML tidak sah | ✅ | Ada jalur cadangan pembacaan XML mentah |
+| Berkas non-UTF-8 | ✅ | Dideteksi lalu dikonversi |
+
+#### Mengaktifkan OCR (teks di dalam gambar)
+
+Tanpa OCR, dokumen hasil pindai dan gambar ditolak dengan pesan yang menjelaskan
+sebabnya — bukan gagal diam-diam.
+
+```bash
+# Windows
+winget install -e --id UB-Mannheim.TesseractOCR
+winget install -e --id oschwartz10612.Poppler   # pdftoppm, untuk PDF pindai
+
+# Linux
+apt install tesseract-ocr tesseract-ocr-ind poppler-utils
+```
+
+Bila binernya tidak berada di PATH, tunjuk langsung lewat `.env`:
+
+```env
+TESSERACT_PATH="C:\Program Files\Tesseract-OCR\tesseract.exe"
+PDFTOPPM_PATH="C:\poppler\bin\pdftoppm.exe"
+OCR_LANG=ind+eng
+OCR_MAX_PAGES=40
+```
+
+Seluruh setelan lain ada di `config/chatbot.php` (batas unggahan, panjang teks,
+dan anggaran ukuran prompt).
+
+> **Penting:** perbaikan ekstraksi hanya berlaku saat dokumen **diunggah**.
+> Entri yang sudah tersimpan memuat hasil ekstraksi lama — berkas aslinya tidak
+> disimpan, jadi tidak bisa diproses ulang. Unggah ulang dokumen lama agar
+> tabelnya ikut terbaca.
 
 ### 9c. Helper ekstraksi teks
 

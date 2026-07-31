@@ -27,6 +27,7 @@ Route::middleware('auth')->group(base_path('routes/chatbot.php'));
 
 // Halaman konsol admin (Blade). Sengaja hanya di sisi web — halaman HTML tidak
 // relevan untuk routes/api.php yang dipakai aplikasi mobile lewat token Sanctum.
-Route::middleware(['auth', 'can:manage-chatbot'])
-    ->get('/admin/chatbot', fn () => view('admin.chatbot'))
-    ->name('admin.chatbot');
+Route::middleware(['auth', 'can:manage-chatbot'])->group(function () {
+    Route::get('/admin/chatbot', fn () => view('admin.chatbot'))->name('admin.chatbot');
+    Route::get('/admin/chatbot/monitor', fn () => view('admin.monitor'))->name('admin.chatbot.monitor');
+});
