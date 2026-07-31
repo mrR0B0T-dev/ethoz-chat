@@ -2,12 +2,14 @@
 //
 // Prasyarat pubspec.yaml:
 //   dependencies:
-//     http: ^1.2.0
+//     http: ^1.6.0
+//     flutter_markdown_plus: ^1.0.12
 //
 // Cara pakai: tampilkan `const EthozChatbotScreen()` sebagai satu halaman
 // (mis. menu "Asisten" di Ethoz). Chat memanggil backend Laravel dan memakai
 // token login pegawai yang SUDAH ADA — tidak ada login AI terpisah.
 
+import 'dart:async';
 import 'dart:convert';
 // Catatan: JANGAN mengimpor dart:io di sini — aplikasi ini juga dibangun untuk
 // Web, dan dart:io tidak tersedia di sana. Deteksi platform memakai
@@ -15,6 +17,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show debugPrint, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:http/http.dart' as http;
 
 // ── Konfigurasi ──────────────────────────────────────────────────
@@ -36,12 +40,11 @@ class EthozChatConfig {
     return 'http://127.0.0.1:8000';
   }
 
-  // Route chatbot (daftarkan di routes/api.php dengan middleware auth:sanctum).
-  static String get endpoint => '$baseUrl/api/chatbot/send';
+  static String get api => '$baseUrl/api';
+  static String get endpoint => '$api/chatbot/send';
+  static String get streamEndpoint => '$api/chatbot/stream';
 
   // Kembalikan token Sanctum milik pegawai yang sedang login di Ethoz.
-  // Ambil dari penyimpanan sesi yang sudah Anda pakai (mis. flutter_secure_storage
-  // atau provider auth Anda). TIDAK perlu token/akun AI khusus.
   //
   // Utamakan --dart-define=ETHOZ_TOKEN=... agar token tidak ikut ter-commit:
   //   flutter run -d chrome --dart-define=ETHOZ_TOKEN=3|xxxxx
@@ -61,8 +64,7 @@ class EthozChatConfig {
 }
 
 /// Kegagalan saat memanggil backend, lengkap dengan pesan yang layak
-/// ditampilkan ke pengguna. Sebelumnya semua galat diseragamkan menjadi
-/// "koneksi bermasalah" sehingga penyebabnya tidak pernah terlihat.
+/// ditampilkan ke pengguna.
 class ChatbotException implements Exception {
   final String userMessage;
   final String detail;
@@ -72,38 +74,146 @@ class ChatbotException implements Exception {
   String toString() => 'ChatbotException($detail)';
 }
 
-// ── Model pesan ──────────────────────────────────────────────────
+// ── Model ────────────────────────────────────────────────────────
 class ChatMessage {
   final String role; // 'user' | 'assistant'
   final String content;
-  const ChatMessage(this.role, this.content);
+
+  /// Id pesan di server — dipakai untuk mengirim penilaian. Null untuk sapaan
+  /// pembuka dan pesan yang belum tersimpan.
+  final int? id;
+
+  const ChatMessage(this.role, this.content, {this.id});
+
+  bool get isBot => role == 'assistant';
+
+  ChatMessage copyWith({String? content, int? id}) =>
+      ChatMessage(role, content ?? this.content, id: id ?? this.id);
+
   Map<String, String> toJson() => {'role': role, 'content': content};
+}
+
+/// Jawaban utuh (jalur tanpa aliran).
+class ChatReply {
+  final String text;
+  final int? conversationId;
+  final int? messageId;
+  const ChatReply(this.text, {this.conversationId, this.messageId});
+}
+
+/// Satu peristiwa dari aliran SSE: meta | delta | error | done.
+class ChatChunk {
+  final String type;
+  final Map<String, dynamic> data;
+  const ChatChunk(this.type, this.data);
+
+  String get text => (data['text'] as String?) ?? '';
+}
+
+/// Ringkasan percakapan untuk daftar riwayat.
+class ConversationSummary {
+  final int id;
+  final String title;
+  final int messageCount;
+  const ConversationSummary(this.id, this.title, this.messageCount);
 }
 
 // ── Service: panggil backend Laravel ─────────────────────────────
 class ChatbotService {
-  Future<String> send(List<ChatMessage> messages) async {
+  Future<Map<String, String>> _headers() async {
     final token = await EthozChatConfig.authToken();
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  /// Jawaban yang mengalir. Generator ditutup otomatis saat langganan
+  /// dibatalkan (tombol "Hentikan"), sehingga koneksi ikut ditutup.
+  Stream<ChatChunk> stream(
+    List<ChatMessage> messages, {
+    int? conversationId,
+  }) async* {
+    final client = http.Client();
+
+    try {
+      final request = http.Request('POST', Uri.parse(EthozChatConfig.streamEndpoint))
+        ..headers.addAll(await _headers())
+        ..body = jsonEncode({
+          'messages': messages.map((m) => m.toJson()).toList(),
+          'conversation_id': ?conversationId,
+        });
+
+      final http.StreamedResponse res;
+      try {
+        res = await client.send(request).timeout(const Duration(seconds: 30));
+      } catch (e) {
+        throw ChatbotException(
+          'Tidak dapat terhubung ke server Ethoz. Pastikan backend berjalan.',
+          'Gagal membuka aliran ${EthozChatConfig.streamEndpoint}: $e',
+        );
+      }
+
+      if (res.statusCode == 401) {
+        throw const ChatbotException(
+          'Sesi Anda telah berakhir. Silakan masuk kembali.',
+          'HTTP 401 — token Sanctum tidak valid atau belum diisi.',
+        );
+      }
+      if (res.statusCode == 429) {
+        throw const ChatbotException(
+          'Terlalu banyak pertanyaan. Coba lagi sebentar.',
+          'HTTP 429 — kena throttle.',
+        );
+      }
+      if (res.statusCode != 200) {
+        throw ChatbotException(
+          'Asisten sedang bermasalah. Coba lagi sebentar.',
+          'HTTP ${res.statusCode} saat membuka aliran.',
+        );
+      }
+
+      var event = '';
+      await for (final line
+          in res.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+        if (line.startsWith('event:')) {
+          event = line.substring(6).trim();
+        } else if (line.startsWith('data:')) {
+          final raw = line.substring(5).trim();
+          if (raw.isEmpty) continue;
+          try {
+            yield ChatChunk(event, jsonDecode(raw) as Map<String, dynamic>);
+          } catch (e) {
+            debugPrint('[EthozChat] potongan SSE tidak terbaca: $e');
+          }
+        }
+      }
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Jalur cadangan tanpa aliran — dipakai bila SSE gagal dibuka (mis.
+  /// diblokir proxy perusahaan) sebelum satu pun teks diterima.
+  Future<ChatReply> send(
+    List<ChatMessage> messages, {
+    int? conversationId,
+  }) async {
     final http.Response res;
 
     try {
       res = await http
           .post(
             Uri.parse(EthozChatConfig.endpoint),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              if (token != null) 'Authorization': 'Bearer $token',
-            },
+            headers: await _headers(),
             body: jsonEncode({
               'messages': messages.map((m) => m.toJson()).toList(),
+              'conversation_id': ?conversationId,
             }),
           )
           .timeout(const Duration(seconds: 60));
     } catch (e) {
-      // Menangkap kegagalan jaringan lintas platform: SocketException di
-      // mobile/desktop, ClientException (koneksi ditolak / CORS) di Web,
-      // dan TimeoutException dari .timeout().
       throw ChatbotException(
         'Tidak dapat terhubung ke server Ethoz. Pastikan backend berjalan.',
         'Gagal memanggil ${EthozChatConfig.endpoint}: $e',
@@ -116,64 +226,111 @@ class ChatbotService {
         'HTTP 401 — token Sanctum tidak valid atau belum diisi.',
       );
     }
-    if (res.statusCode == 429) {
-      throw const ChatbotException(
-        'Terlalu banyak pertanyaan. Coba lagi sebentar.',
-        'HTTP 429 — kena throttle:30,1.',
-      );
-    }
     if (res.statusCode != 200) {
       throw ChatbotException(
         'Asisten sedang bermasalah. Coba lagi sebentar.',
-        'HTTP ${res.statusCode}: ${_snippet(res)}',
+        'HTTP ${res.statusCode}.',
       );
     }
 
-    final Map<String, dynamic> data;
-    try {
-      data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    } catch (e) {
-      throw ChatbotException(
-        'Asisten sedang bermasalah. Coba lagi sebentar.',
-        'Balasan bukan JSON yang sah: ${_snippet(res)}',
-      );
-    }
-
-    // Backend menyertakan "debug" saat APP_DEBUG=true — bantu penelusuran.
-    if (data['debug'] != null) {
-      debugPrint('[EthozChat] backend debug: ${jsonEncode(data['debug'])}');
-    }
-
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     final reply = (data['reply'] as String?)?.trim();
-    return (reply != null && reply.isNotEmpty)
-        ? reply
-        : 'Maaf, saya belum bisa memproses itu.';
+
+    return ChatReply(
+      (reply != null && reply.isNotEmpty)
+          ? reply
+          : 'Maaf, saya belum bisa memproses itu.',
+      conversationId: data['conversation_id'] as int?,
+      messageId: data['message_id'] as int?,
+    );
   }
 
-  static String _snippet(http.Response res) {
-    final body = res.body;
-    return body.length > 200 ? '${body.substring(0, 200)}…' : body;
+  /// Kirim penilaian pegawai atas satu jawaban. Kegagalan sengaja didiamkan:
+  /// penilaian bersifat pelengkap dan tidak boleh mengganggu alur chat.
+  Future<bool> rate(int messageId, String value) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${EthozChatConfig.api}/chatbot/messages/$messageId/feedback'),
+            headers: await _headers(),
+            body: jsonEncode({'feedback': value}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[EthozChat] gagal mengirim penilaian: $e');
+      return false;
+    }
+  }
+
+  /// Daftar percakapan milik pegawai sendiri.
+  Future<List<ConversationSummary>> conversations() async {
+    try {
+      final res = await http
+          .get(Uri.parse('${EthozChatConfig.api}/chatbot/conversations'),
+              headers: await _headers())
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode != 200) return const [];
+
+      return (jsonDecode(utf8.decode(res.bodyBytes)) as List)
+          .map((r) => ConversationSummary(
+                r['id'] as int,
+                (r['title'] as String?) ?? 'Percakapan',
+                (r['message_count'] as int?) ?? 0,
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('[EthozChat] gagal memuat riwayat: $e');
+      return const [];
+    }
+  }
+
+  /// Isi satu percakapan lama.
+  Future<List<ChatMessage>> conversation(int id) async {
+    try {
+      final res = await http
+          .get(Uri.parse('${EthozChatConfig.api}/chatbot/conversations/$id'),
+              headers: await _headers())
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode != 200) return const [];
+
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+
+      return (data['messages'] as List)
+          .map((m) => ChatMessage(
+                m['role'] as String,
+                m['content'] as String,
+                id: m['id'] as int?,
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('[EthozChat] gagal membuka percakapan: $e');
+      return const [];
+    }
   }
 }
 
 // ── Warna Ethoz ──────────────────────────────────────────────────
 class Ez {
-  static const navy = Color(0xFF031334);
-  static const blue = Color(0xFF004A7B);
-  static const teal = Color(0xFF00796E);
-  static const accTeal = Color(0xFF00A88F);
-  static const mint = Color(0xFF00F6A5);
-  static const ink = Color(0xFF0B1B2B);
-  static const muted = Color(0xFF6B7B87);
-  static const soft = Color(0xFFF3F8F7);
-  static const line = Color(0xFFE6EFEC);
-  static const bg = Color(0xFFF6FBFA);
+  static const navy = Color(0xFF062A52);
+  static const blue = Color(0xFF0F5AA8);
+  static const azure = Color(0xFF1E7BD6);
+  static const accent = Color(0xFF2E90E4);
+  static const sky = Color(0xFF63BDF5);
+  static const ink = Color(0xFF0A1A2B);
+  static const muted = Color(0xFF6B7E92);
+  static const soft = Color(0xFFF1F6FC);
+  static const line = Color(0xFFE3ECF5);
+  static const bg = Color(0xFFF5FAFF);
 }
 
 // ── Layar chat ───────────────────────────────────────────────────
 class EthozChatbotScreen extends StatefulWidget {
-  // Biarkan null untuk memakai ChatbotService asli (memanggil backend Laravel).
-  // Untuk uji tampilan tanpa backend, berikan service tiruan (lihat main.dart).
+  /// Biarkan null untuk memakai ChatbotService asli (memanggil backend).
+  /// Untuk uji tampilan tanpa backend, berikan service tiruan.
   final ChatbotService? service;
   const EthozChatbotScreen({super.key, this.service});
 
@@ -185,14 +342,21 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
   late final ChatbotService _service = widget.service ?? ChatbotService();
   final _controller = TextEditingController();
   final _scroll = ScrollController();
-  bool _loading = false;
+  final _inputFocus = FocusNode();
 
-  final List<ChatMessage> _messages = [
-    const ChatMessage(
-      'assistant',
-      'Halo, saya Ethoz Chat. Ada yang bisa saya bantu?',
-    ),
-  ];
+  /// Percakapan berjalan di server; dikirim ulang tiap giliran agar riwayat
+  /// dan pemantauan tidak terpecah per pertanyaan.
+  int? _conversationId;
+
+  /// Penilaian yang sudah diberikan, per id pesan.
+  final Map<int, String> _ratings = {};
+
+  final List<ChatMessage> _messages = [];
+
+  /// Langganan aliran yang sedang berjalan — dibatalkan oleh tombol Hentikan.
+  StreamSubscription<ChatChunk>? _sub;
+  bool _busy = false;
+  bool _receiving = false; // sudah ada teks masuk?
 
   static const _chips = [
     'Berapa hak cuti tahunan?',
@@ -203,51 +367,196 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
 
   @override
   void dispose() {
+    _sub?.cancel();
     _controller.dispose();
     _scroll.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
+  bool get _isEmpty => _messages.isEmpty;
+
+  // ── Kirim & alirkan ────────────────────────────────────────────
   Future<void> _send([String? preset]) async {
     final text = (preset ?? _controller.text).trim();
-    if (text.isEmpty || _loading) return;
+    if (text.isEmpty || _busy) return;
 
     setState(() {
       _messages.add(ChatMessage('user', text));
       _controller.clear();
-      _loading = true;
+      _busy = true;
+      _receiving = false;
     });
     _scrollToEnd();
 
-    // Kirim riwayat mulai dari giliran user pertama (syarat API).
-    final history = <ChatMessage>[];
+    await _run(_history());
+  }
+
+  /// Ulangi jawaban terakhir: buang jawaban lama lalu alirkan ulang.
+  Future<void> _retry() async {
+    if (_busy || _messages.isEmpty) return;
+
+    setState(() {
+      if (_messages.last.isBot) _messages.removeLast();
+      _busy = true;
+      _receiving = false;
+    });
+
+    await _run(_history());
+  }
+
+  /// Riwayat mulai dari giliran user pertama (syarat API).
+  List<ChatMessage> _history() {
+    final out = <ChatMessage>[];
     var started = false;
     for (final m in _messages) {
-      if (!started && m.role != 'user') continue;
+      if (!started && !(m.role == 'user')) continue;
       started = true;
-      history.add(m);
+      out.add(m);
     }
+    return out;
+  }
 
-    try {
-      final reply = await _service.send(history);
-      if (!mounted) return;
-      setState(() => _messages.add(ChatMessage('assistant', reply)));
-    } catch (e) {
-      // Tampilkan sebab yang spesifik, dan catat detail teknis ke console
-      // supaya kegagalan tidak lagi tersamar jadi satu pesan generik.
-      final message = e is ChatbotException
-          ? e.userMessage
-          : 'Maaf, koneksi ke asisten sedang bermasalah. Coba lagi sebentar.';
-      debugPrint(
-        '[EthozChat] gagal mengirim: ${e is ChatbotException ? e.detail : e}',
-      );
+  Future<void> _run(List<ChatMessage> history) async {
+    final completer = Completer<void>();
+    var index = -1; // posisi gelembung jawaban di dalam _messages
 
-      if (!mounted) return;
-      setState(() => _messages.add(ChatMessage('assistant', message)));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    void appendText(String piece) {
+      if (piece.isEmpty) return;
+      setState(() {
+        if (index < 0) {
+          _messages.add(ChatMessage('assistant', piece));
+          index = _messages.length - 1;
+          _receiving = true;
+        } else {
+          _messages[index] =
+              _messages[index].copyWith(content: _messages[index].content + piece);
+        }
+      });
       _scrollToEnd();
     }
+
+    _sub = _service.stream(history, conversationId: _conversationId).listen(
+      (chunk) {
+        switch (chunk.type) {
+          case 'meta':
+            _conversationId = (chunk.data['conversation_id'] as int?) ?? _conversationId;
+            final id = chunk.data['message_id'] as int?;
+            if (id != null && index >= 0) {
+              setState(() => _messages[index] = _messages[index].copyWith(id: id));
+            } else if (id != null) {
+              // Simpan untuk dipasang saat gelembung dibuat.
+              _pendingMessageId = id;
+            }
+          case 'delta':
+            appendText(chunk.text);
+            if (_pendingMessageId != null && index >= 0 && _messages[index].id == null) {
+              setState(() =>
+                  _messages[index] = _messages[index].copyWith(id: _pendingMessageId));
+              _pendingMessageId = null;
+            }
+          case 'error':
+            final reply = (chunk.data['reply'] as String?) ?? '';
+            if (index < 0 && reply.isNotEmpty) appendText(reply);
+          case 'done':
+            final id = chunk.data['message_id'] as int?;
+            if (id != null && index >= 0 && _messages[index].id == null) {
+              setState(() => _messages[index] = _messages[index].copyWith(id: id));
+            }
+        }
+      },
+      onError: (Object e) async {
+        debugPrint('[EthozChat] aliran gagal: $e');
+        // Belum ada teks sama sekali → coba jalur biasa (SSE bisa diblokir proxy).
+        if (index < 0) {
+          await _fallback(history, e);
+        }
+        if (!completer.isCompleted) completer.complete();
+      },
+      onDone: () {
+        if (!completer.isCompleted) completer.complete();
+      },
+      cancelOnError: true,
+    );
+
+    await completer.future;
+
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _receiving = false;
+      _sub = null;
+    });
+    _scrollToEnd();
+  }
+
+  int? _pendingMessageId;
+
+  Future<void> _fallback(List<ChatMessage> history, Object streamError) async {
+    try {
+      final reply = await _service.send(history, conversationId: _conversationId);
+      if (!mounted) return;
+      setState(() {
+        _conversationId = reply.conversationId ?? _conversationId;
+        _messages.add(ChatMessage('assistant', reply.text, id: reply.messageId));
+      });
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ChatbotException
+          ? e.userMessage
+          : (streamError is ChatbotException
+              ? streamError.userMessage
+              : 'Maaf, koneksi ke asisten sedang bermasalah. Coba lagi sebentar.');
+      setState(() => _messages.add(ChatMessage('assistant', message)));
+    }
+  }
+
+  void _stop() {
+    _sub?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _receiving = false;
+      _sub = null;
+    });
+  }
+
+  void _newChat() {
+    _sub?.cancel();
+    setState(() {
+      _messages.clear();
+      _ratings.clear();
+      _conversationId = null;
+      _busy = false;
+      _receiving = false;
+      _sub = null;
+    });
+  }
+
+  Future<void> _openHistory() async {
+    final list = await _service.conversations();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _HistorySheet(
+        items: list,
+        onPick: (id) async {
+          Navigator.of(context).pop();
+          final messages = await _service.conversation(id);
+          if (!mounted) return;
+          setState(() {
+            _messages
+              ..clear()
+              ..addAll(messages);
+            _conversationId = id;
+          });
+          _scrollToEnd();
+        },
+      ),
+    );
   }
 
   void _scrollToEnd() {
@@ -255,13 +564,14 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
       if (_scroll.hasClients) {
         _scroll.animateTo(
           _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
         );
       }
     });
   }
 
+  // ── Rangka ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -270,8 +580,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
         child: Column(
           children: [
             _header(),
-            Expanded(child: _thread()),
-            if (_messages.length <= 1 && !_loading) _chipRow(),
+            Expanded(child: _isEmpty ? _welcome() : _thread()),
             _inputBar(),
           ],
         ),
@@ -281,107 +590,108 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
 
   Widget _header() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Ez.navy, Ez.blue, Ez.teal],
+          colors: [Ez.navy, Ez.blue, Ez.azure],
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
+        boxShadow: [
+          BoxShadow(color: Color(0x33062A52), blurRadius: 18, offset: Offset(0, 6)),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(13),
-              gradient: const LinearGradient(colors: [Ez.mint, Ez.accTeal]),
+              gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
+              boxShadow: const [
+                BoxShadow(color: Color(0x5963BDF5), blurRadius: 14, offset: Offset(0, 4)),
+              ],
             ),
-            child: const Icon(Icons.auto_awesome, color: Ez.navy, size: 22),
+            child: const Icon(Icons.auto_awesome, color: Ez.navy, size: 20),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Ethoz Chat',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ethoz Chat',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: .1,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: Ez.mint,
-                      shape: BoxShape.circle,
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: Ez.sky,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: Ez.sky.withValues(alpha: .8), blurRadius: 7),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Online • PT BDP',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 12,
+                    const SizedBox(width: 6),
+                    Text(
+                      _busy ? 'Sedang menjawab…' : 'Siap membantu',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .85),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _headerAction(
+            icon: Icons.history_rounded,
+            tooltip: 'Riwayat percakapan',
+            onTap: _openHistory,
+          ),
+          const SizedBox(width: 4),
+          _headerAction(
+            icon: Icons.add_rounded,
+            tooltip: 'Percakapan baru',
+            onTap: _isEmpty ? null : _newChat,
           ),
         ],
       ),
     );
   }
 
-  Widget _thread() {
-    return ListView(
-      controller: _scroll,
-      padding: const EdgeInsets.all(16),
-      children: [
-        for (final m in _messages) _bubble(m),
-        if (_loading) _typingBubble(),
-      ],
-    );
-  }
-
-  Widget _bubble(ChatMessage m) {
-    final bot = m.role == 'assistant';
-    return Align(
-      alignment: bot ? Alignment.centerLeft : Alignment.centerRight,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: bot
-                ? null
-                : const LinearGradient(colors: [Ez.accTeal, Ez.blue]),
-            color: bot ? Ez.soft : null,
-            border: bot ? Border.all(color: Ez.line) : null,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft: Radius.circular(bot ? 5 : 16),
-              bottomRight: Radius.circular(bot ? 16 : 5),
-            ),
-          ),
-          child: Text(
-            m.content,
-            style: TextStyle(
-              color: bot ? Ez.ink : Colors.white,
-              fontSize: 14.5,
-              height: 1.45,
+  Widget _headerAction({
+    required IconData icon,
+    required String tooltip,
+    VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Opacity(
+        opacity: onTap == null ? .4 : 1,
+        child: Material(
+          color: Colors.white.withValues(alpha: .16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(11),
+            onTap: onTap,
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: Icon(icon, color: Colors.white, size: 19),
             ),
           ),
         ),
@@ -389,20 +699,284 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
     );
   }
 
-  Widget _typingBubble() {
+  /// Layar pembuka: sapaan + saran pertanyaan.
+  Widget _welcome() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 34, 20, 16),
+      children: [
+        Center(
+          child: Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
+              boxShadow: const [
+                BoxShadow(color: Color(0x4463BDF5), blurRadius: 22, offset: Offset(0, 8)),
+              ],
+            ),
+            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 29),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'Halo, saya Ethoz Chat',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Ez.navy),
+        ),
+        const SizedBox(height: 7),
+        const Text(
+          'Tanyakan apa saja seputar kepegawaian dan\ninformasi perusahaan.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13.5, color: Ez.muted, height: 1.5),
+        ),
+        const SizedBox(height: 26),
+        for (final c in _chips) _suggestion(c),
+      ],
+    );
+  }
+
+  Widget _suggestion(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _send(text),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Ez.line),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    text,
+                    style: const TextStyle(fontSize: 13.5, color: Ez.ink),
+                  ),
+                ),
+                const Icon(Icons.arrow_outward_rounded, size: 16, color: Ez.accent),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _thread() {
+    return ListView.builder(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+      itemCount: _messages.length + (_busy && !_receiving ? 1 : 0),
+      itemBuilder: (_, i) {
+        if (i >= _messages.length) return _thinking();
+        return _bubble(_messages[i], isLast: i == _messages.length - 1);
+      },
+    );
+  }
+
+  Widget _bubble(ChatMessage m, {required bool isLast}) {
+    final bot = m.isBot;
+    final streaming = bot && isLast && _busy && _receiving;
+
+    return Align(
+      alignment: bot ? Alignment.centerLeft : Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * (bot ? 0.92 : 0.80),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              bot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+          children: [
+            Container(
+              margin: EdgeInsets.only(bottom: bot ? 4 : 14),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+              decoration: BoxDecoration(
+                gradient: bot ? null : const LinearGradient(colors: [Ez.accent, Ez.blue]),
+                color: bot ? Colors.white : null,
+                border: bot ? Border.all(color: Ez.line) : null,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(17),
+                  topRight: const Radius.circular(17),
+                  bottomLeft: Radius.circular(bot ? 5 : 17),
+                  bottomRight: Radius.circular(bot ? 17 : 5),
+                ),
+                boxShadow: bot
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x0F062A52),
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: bot
+                  ? _botText(m.content, streaming: streaming)
+                  : Text(
+                      m.content,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14.5,
+                        height: 1.45,
+                      ),
+                    ),
+            ),
+            if (bot && !streaming) _actions(m, isLast: isLast),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Jawaban dirender sebagai markdown ringan; kursor berkedip saat mengalir.
+  Widget _botText(String content, {required bool streaming}) {
+    final body = MarkdownBody(
+      data: content.isEmpty ? '…' : content,
+      selectable: true,
+      styleSheet: MarkdownStyleSheet(
+        p: const TextStyle(color: Ez.ink, fontSize: 14.5, height: 1.5),
+        strong: const TextStyle(fontWeight: FontWeight.w700, color: Ez.navy),
+        listBullet: const TextStyle(color: Ez.ink, fontSize: 14.5, height: 1.5),
+        code: const TextStyle(
+          fontSize: 13,
+          backgroundColor: Ez.soft,
+          fontFamily: 'monospace',
+          color: Ez.blue,
+        ),
+        codeblockDecoration: BoxDecoration(
+          color: Ez.soft,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Ez.line),
+        ),
+        blockquoteDecoration: BoxDecoration(
+          color: Ez.soft,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        h1: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Ez.navy),
+        h2: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Ez.navy),
+        h3: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Ez.navy),
+        blockSpacing: 9,
+      ),
+    );
+
+    if (!streaming) return body;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Flexible(child: body),
+        const SizedBox(width: 3),
+        const _Caret(),
+      ],
+    );
+  }
+
+  /// Tindakan pada jawaban: salin, ulangi, dan penilaian.
+  Widget _actions(ChatMessage m, {required bool isLast}) {
+    final rated = m.id == null ? null : _ratings[m.id];
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 14),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _iconAction(
+            icon: Icons.copy_rounded,
+            tooltip: 'Salin jawaban',
+            onTap: () async {
+              await Clipboard.setData(ClipboardData(text: m.content));
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Jawaban disalin'),
+                  duration: Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+          if (isLast)
+            _iconAction(
+              icon: Icons.refresh_rounded,
+              tooltip: 'Coba jawab ulang',
+              onTap: _busy ? null : _retry,
+            ),
+          if (m.id != null) ...[
+            const SizedBox(width: 2),
+            if (rated == null) ...[
+              _iconAction(
+                icon: Icons.thumb_up_outlined,
+                tooltip: 'Jawaban ini membantu',
+                onTap: () => _rate(m.id!, 'up'),
+              ),
+              _iconAction(
+                icon: Icons.thumb_down_outlined,
+                tooltip: 'Jawaban ini kurang membantu',
+                onTap: () => _rate(m.id!, 'down'),
+              ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Text(
+                  rated == 'up' ? 'Terima kasih atas masukannya' : 'Masukan terkirim',
+                  style: const TextStyle(fontSize: 11.5, color: Ez.muted),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _rate(int messageId, String value) async {
+    setState(() => _ratings[messageId] = value);
+    await _service.rate(messageId, value);
+  }
+
+  Widget _iconAction({
+    required IconData icon,
+    required String tooltip,
+    VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(
+            icon,
+            size: 15,
+            color: onTap == null ? Ez.line : Ez.muted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _thinking() {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 15),
         decoration: BoxDecoration(
-          color: Ez.soft,
+          color: Colors.white,
           border: Border.all(color: Ez.line),
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
+            topLeft: Radius.circular(17),
+            topRight: Radius.circular(17),
             bottomLeft: Radius.circular(5),
-            bottomRight: Radius.circular(16),
+            bottomRight: Radius.circular(17),
           ),
         ),
         child: const _TypingDots(),
@@ -410,41 +984,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
     );
   }
 
-  Widget _chipRow() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: _chips.map((c) {
-          return InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: () => _send(c),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFECF7F4),
-                border: Border.all(color: const Color(0xFFCDEAE3)),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                c,
-                style: const TextStyle(
-                  color: Ez.teal,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   Widget _inputBar() {
-    final canSend = !_loading;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: const BoxDecoration(
@@ -452,52 +992,204 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
         border: Border(top: BorderSide(color: Ez.line)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: TextField(
               controller: _controller,
+              focusNode: _inputFocus,
+              enabled: !_busy,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _send(),
               minLines: 1,
-              maxLines: 4,
+              maxLines: 5,
+              style: const TextStyle(fontSize: 14.5, color: Ez.ink),
               decoration: InputDecoration(
-                hintText: 'Tulis pertanyaan Anda…',
+                hintText: _busy ? 'Menunggu jawaban…' : 'Tulis pertanyaan Anda…',
                 hintStyle: const TextStyle(color: Ez.muted, fontSize: 14),
                 filled: true,
-                fillColor: const Color(0xFFF8FBFA),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
+                fillColor: const Color(0xFFF7FAFE),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFDDE8E5)),
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: Color(0xFFD7E3F2)),
+                ),
+                disabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: Ez.line),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Ez.accTeal, width: 1.6),
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: Ez.accent, width: 1.6),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: canSend ? () => _send() : null,
-            child: Opacity(
-              opacity: canSend ? 1 : 0.45,
-              child: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(colors: [Ez.mint, Ez.accTeal]),
-                ),
-                child: const Icon(Icons.send_rounded, color: Ez.navy, size: 22),
-              ),
-            ),
-          ),
+          const SizedBox(width: 9),
+          _busy ? _stopButton() : _sendButton(),
         ],
       ),
+    );
+  }
+
+  Widget _sendButton() {
+    return Tooltip(
+      message: 'Kirim',
+      child: GestureDetector(
+        onTap: () => _send(),
+        child: Container(
+          width: 47,
+          height: 47,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
+            boxShadow: const [
+              BoxShadow(color: Color(0x4D2E90E4), blurRadius: 12, offset: Offset(0, 4)),
+            ],
+          ),
+          child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+
+  Widget _stopButton() {
+    return Tooltip(
+      message: 'Hentikan',
+      child: GestureDetector(
+        onTap: _stop,
+        child: Container(
+          width: 47,
+          height: 47,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            color: Ez.soft,
+            border: Border.all(color: Ez.line),
+          ),
+          child: const Icon(Icons.stop_rounded, color: Ez.navy, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Riwayat percakapan ───────────────────────────────────────────
+class _HistorySheet extends StatelessWidget {
+  final List<ConversationSummary> items;
+  final void Function(int id) onPick;
+  const _HistorySheet({required this.items, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * .7,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Ez.line,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Riwayat percakapan',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Ez.navy),
+          ),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 26),
+              child: Text(
+                'Belum ada percakapan tersimpan.',
+                style: TextStyle(color: Ez.muted, fontSize: 13),
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final c = items[i];
+                  return Material(
+                    color: Ez.soft,
+                    borderRadius: BorderRadius.circular(13),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(13),
+                      onTap: () => onPick(c.id),
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                        child: Text(
+                          c.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13.5, color: Ez.ink),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Kursor berkedip saat jawaban mengalir ────────────────────────
+class _Caret extends StatefulWidget {
+  const _Caret();
+
+  @override
+  State<_Caret> createState() => _CaretState();
+}
+
+class _CaretState extends State<_Caret> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) {
+        final on = _c.value < .5;
+        return Container(
+          width: 7,
+          height: 15,
+          margin: const EdgeInsets.only(bottom: 3),
+          decoration: BoxDecoration(
+            color: on ? Ez.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        );
+      },
     );
   }
 }
@@ -538,7 +1230,7 @@ class _TypingDotsState extends State<_TypingDots>
               width: 6,
               height: 6,
               decoration: BoxDecoration(
-                color: Ez.accTeal.withValues(alpha: o.clamp(0.0, 1.0)),
+                color: Ez.accent.withValues(alpha: o.clamp(0.0, 1.0)),
                 shape: BoxShape.circle,
               ),
             );

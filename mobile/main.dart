@@ -1,4 +1,4 @@
-// Titik masuk untuk MENJALANKAN & MENGUJI layar Asisten Ethoz.
+// Titik masuk untuk MENJALANKAN & MENGUJI layar Ethoz Chat.
 //
 // Cara cepat mencoba:
 //   1) Buat project     : flutter create ethoz_test
@@ -24,7 +24,7 @@ class EthozChatbotDemo extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Asisten Ethoz',
+      title: 'Ethoz Chat',
       // MODE UJI (tanpa backend):
       home: EthozChatbotScreen(service: MockChatbotService()),
       // BACKEND ASLI: home: const EthozChatbotScreen(),

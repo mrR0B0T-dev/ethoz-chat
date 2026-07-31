@@ -3,37 +3,37 @@ import * as mammothLib from "mammoth";
 
 // ══ Ethoz brand tokens ═══════════════════════════════════════════
 const C = {
-  navy: "#031334",
-  blue: "#004A7B",
-  teal: "#00796E",
-  mint: "#00F5D4",
-  mint2: "#00F6A5",
-  accTeal: "#00A88F",
-  ink: "#0B1B2B",
-  muted: "#6B7B87",
-  line: "#E6EFEC",
-  soft: "#F3F8F7",
-  field: "#F8FBFA",
+  navy: "#062A52",
+  blue: "#0F5AA8",
+  azure: "#1E7BD6",
+  skyAlt: "#8FD3FF",
+  sky: "#63BDF5",
+  accent: "#2E90E4",
+  ink: "#0A1A2B",
+  muted: "#6B7E92",
+  line: "#E3ECF5",
+  soft: "#F1F6FC",
+  field: "#F7FAFE",
 };
 
 const ROLES = [
   { id: "staff", label: "Staff / Pegawai" },
-  { id: "hr", label: "HR" },
+  { id: "hr", label: "HC" },
   { id: "manager", label: "Manager" },
 ];
 
 const SCOPES = [
   { id: "all", label: "Semua pegawai" },
-  { id: "hr", label: "HR saja" },
+  { id: "hr", label: "HC saja" },
   { id: "manager", label: "Manager saja" },
-  { id: "hr_manager", label: "HR & Manager" },
+  { id: "hr_manager", label: "HC & Manager" },
 ];
 
 // ── Default configuration (sample PT BDP data) ───────────────────
 const DEFAULT_CONFIG = {
-  botName: "Asisten Ethoz",
+  botName: "Ethoz Chat",
   company: "PT BDP",
-  role: "Asisten HR & informasi perusahaan untuk pegawai PT BDP.",
+  role: "Asisten HC & informasi perusahaan untuk pegawai PT BDP.",
   knowledge: [
     {
       id: 1,
@@ -61,28 +61,28 @@ const DEFAULT_CONFIG = {
       title: "E-Slip Gaji",
       scope: "all",
       content:
-        "Terbit tiap tanggal 25, diunduh di menu e-Slip. Selisih komponen: hubungi tim Payroll HR.",
+        "Terbit tiap tanggal 25, diunduh di menu e-Slip. Selisih komponen: hubungi tim Payroll HC.",
     },
     {
       id: 5,
       title: "Struktur Organisasi",
       scope: "all",
       content:
-        "Direktur Utama membawahi Direktur Operasional, Direktur Keuangan, dan Direktur SDM & Umum. Direktur SDM & Umum membawahi Manager HR (HR Officer, HR Admin) dan Manager IT (IT Support, System Analyst).",
+        "Direktur Utama membawahi Direktur Operasional, Direktur Keuangan, dan Direktur SDM & Umum. Direktur SDM & Umum membawahi Manager HC (HC Officer, HC Admin) dan Manager IT (IT Support, System Analyst).",
     },
     {
       id: 6,
       title: "Job Description (contoh)",
       scope: "all",
       content:
-        "HR Officer: administrasi kepegawaian, rekrutmen, absensi, payroll. IT Support: troubleshooting perangkat & jaringan, reset password, maintenance sistem. Finance Staff: pembayaran, verifikasi tagihan, laporan keuangan.",
+        "HC Officer: administrasi kepegawaian, rekrutmen, absensi, payroll. IT Support: troubleshooting perangkat & jaringan, reset password, maintenance sistem. Finance Staff: pembayaran, verifikasi tagihan, laporan keuangan.",
     },
     {
       id: 7,
       title: "Rincian Payroll & Tunjangan",
       scope: "hr",
       content:
-        "Struktur gaji, komponen tunjangan, dan skema BPJS bersifat rahasia dan hanya untuk tim HR. Pertanyaan pegawai soal komponen gaji pribadi diarahkan ke Payroll HR.",
+        "Struktur gaji, komponen tunjangan, dan skema BPJS bersifat rahasia dan hanya untuk tim HC. Pertanyaan pegawai soal komponen gaji pribadi diarahkan ke Payroll HC.",
     },
     {
       id: 8,
@@ -164,11 +164,11 @@ function buildSystemPrompt(cfg, roleId) {
   L.push("BATASAN:");
   if (cfg.constraints.noHallucination)
     L.push(
-      "- Jangan mengarang informasi/kebijakan yang tidak ada di BASIS PENGETAHUAN. Jika tidak tahu, katakan jujur dan arahkan ke HR/atasan."
+      "- Jangan mengarang informasi/kebijakan yang tidak ada di BASIS PENGETAHUAN. Jika tidak tahu, katakan jujur dan arahkan ke HC/atasan."
     );
   if (cfg.constraints.protectSensitive)
     L.push(
-      "- Jangan meminta atau menampilkan data pribadi sensitif (gaji spesifik, NIK, data medis). Arahkan ke kanal resmi HR."
+      "- Jangan meskyAlta atau menampilkan data pribadi sensitif (gaji spesifik, NIK, data medis). Arahkan ke kanal resmi HC."
     );
   L.push("- Hanya jawab berdasarkan informasi yang tersedia untuk peran pengguna ini.");
   const blocked = (cfg.constraints.blockedTopics || "")
@@ -255,7 +255,7 @@ const Select = ({ value, onChange, options }) => (
 const Toggle = ({ on, onClick, label }) => (
   <div style={S.toggleRow} onClick={onClick}>
     <span style={S.toggleLabel}>{label}</span>
-    <span style={{ ...S.track, background: on ? C.accTeal : "#CBD8D4" }}>
+    <span style={{ ...S.track, background: on ? C.accent : "#C7D5E4" }}>
       <span style={{ ...S.knob, transform: on ? "translateX(18px)" : "translateX(0)" }} />
     </span>
   </div>
@@ -359,8 +359,8 @@ function AdminConsole({ config, setConfig }) {
         >
           <div style={S.dropIcon}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M12 16V5m0 0L8 9m4-4 4 4" stroke={C.teal} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke={C.teal} strokeWidth="1.9" strokeLinecap="round" />
+              <path d="M12 16V5m0 0L8 9m4-4 4 4" stroke={C.azure} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke={C.azure} strokeWidth="1.9" strokeLinecap="round" />
             </svg>
           </div>
           <div style={{ fontWeight: 600, fontSize: 13.5, color: C.navy }}>Unggah dokumen</div>
@@ -630,7 +630,7 @@ function ChatView({ config }) {
                 d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 3.2V16H6.5A2.5 2.5 0 0 1 4 13.5v-7Z"
                 fill={C.navy}
               />
-              <path d="M13 6.4l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z" fill={C.mint2} />
+              <path d="M13 6.4l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z" fill={C.sky} />
             </svg>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -663,7 +663,7 @@ function ChatView({ config }) {
                     ...(bot
                       ? { background: C.soft, color: C.ink, border: `1px solid ${C.line}`, borderBottomLeftRadius: 5 }
                       : {
-                          background: `linear-gradient(135deg, ${C.accTeal}, ${C.blue})`,
+                          background: `linear-gradient(135deg, ${C.accent}, ${C.blue})`,
                           color: "#fff",
                           borderBottomRightRadius: 5,
                         }),
@@ -777,7 +777,7 @@ const S = {
   page: {
     minHeight: "100vh",
     boxSizing: "border-box",
-    background: "linear-gradient(165deg,#E9F6F3 0%,#F4FAF9 55%,#EAF4FB 100%)",
+    background: "linear-gradient(165deg,#E8F2FD 0%,#F2F8FE 55%,#E9F1FB 100%)",
     fontFamily: "'Inter',system-ui,-apple-system,sans-serif",
     color: C.ink,
     padding: "0 0 40px",
@@ -792,16 +792,16 @@ const S = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "14px 20px",
-    background: "linear-gradient(120deg,#031334 0%,#004A7B 60%,#00796E 100%)",
+    background: "linear-gradient(120deg,#062A52 0%,#0F5AA8 60%,#1E7BD6 100%)",
     color: "#fff",
-    boxShadow: "0 6px 20px rgba(3,19,52,0.18)",
+    boxShadow: "0 6px 20px rgba(6,42,82,0.18)",
   },
   brand: { display: "flex", alignItems: "center", gap: 10 },
   brandDot: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    background: "linear-gradient(135deg,#00F6A5,#00A88F)",
+    background: "linear-gradient(135deg,#63BDF5,#2E90E4)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -836,8 +836,8 @@ const S = {
     background: "#fff",
     borderRadius: 18,
     padding: 18,
-    border: "1px solid rgba(3,19,52,0.06)",
-    boxShadow: "0 6px 18px rgba(3,19,52,0.05)",
+    border: "1px solid rgba(6,42,82,0.06)",
+    boxShadow: "0 6px 18px rgba(6,42,82,0.05)",
   },
   cardTitle: { fontFamily: "'Fredoka',sans-serif", fontWeight: 600, fontSize: 16, color: C.navy },
   cardDesc: { fontSize: 12.5, color: C.muted, marginTop: 2, lineHeight: 1.4 },
@@ -850,13 +850,13 @@ const S = {
     color: C.ink,
     padding: "10px 12px",
     borderRadius: 11,
-    border: "1px solid #DDE8E5",
+    border: "1px solid #D7E3F2",
     outline: "none",
     background: "#fff",
     transition: "border 0.15s, box-shadow 0.15s",
   },
   area: { resize: "vertical", lineHeight: 1.5, minHeight: 44 },
-  kbItem: { background: C.field, borderRadius: 13, padding: 12, border: "1px solid #E4EEEB" },
+  kbItem: { background: C.field, borderRadius: 13, padding: 12, border: "1px solid #DEE9F5" },
   dropzone: {
     display: "flex",
     flexDirection: "column",
@@ -864,8 +864,8 @@ const S = {
     textAlign: "center",
     padding: "20px 16px",
     borderRadius: 14,
-    border: "1.8px dashed #B7DED5",
-    background: "#F1FAF7",
+    border: "1.8px dashed #AFD2F0",
+    background: "#EFF7FE",
     cursor: "pointer",
     transition: "background 0.15s, border-color 0.15s",
   },
@@ -873,7 +873,7 @@ const S = {
     width: 42,
     height: 42,
     borderRadius: 12,
-    background: "#DFF3EC",
+    background: "#DAEDFC",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -888,14 +888,14 @@ const S = {
     background: C.soft,
     border: `1px solid ${C.line}`,
     fontSize: 13,
-    color: C.teal,
+    color: C.azure,
   },
   badgeDoc: {
     fontSize: 10.5,
     fontWeight: 700,
     letterSpacing: 0.3,
     color: "#fff",
-    background: "linear-gradient(135deg,#00A88F,#004A7B)",
+    background: "linear-gradient(135deg,#2E90E4,#0F5AA8)",
     padding: "3px 8px",
     borderRadius: 6,
     whiteSpace: "nowrap",
@@ -905,7 +905,7 @@ const S = {
     fontWeight: 700,
     letterSpacing: 0.3,
     color: C.muted,
-    background: "#EAF0EE",
+    background: "#E6EDF5",
     padding: "3px 8px",
     borderRadius: 6,
     whiteSpace: "nowrap",
@@ -926,9 +926,9 @@ const S = {
     width: "100%",
     padding: "11px",
     borderRadius: 12,
-    border: "1.5px dashed #B7DED5",
-    background: "#F1FAF7",
-    color: C.teal,
+    border: "1.5px dashed #AFD2F0",
+    background: "#EFF7FE",
+    color: C.azure,
     fontWeight: 600,
     fontSize: 13.5,
     cursor: "pointer",
@@ -965,7 +965,7 @@ const S = {
   pre: {
     margin: 0,
     background: C.navy,
-    color: "#CFF7EE",
+    color: "#CFE6FF",
     padding: 14,
     borderRadius: 12,
     fontSize: 11.5,
@@ -988,8 +988,8 @@ const S = {
     background: "#fff",
     padding: "10px 16px",
     borderRadius: 14,
-    border: "1px solid rgba(3,19,52,0.06)",
-    boxShadow: "0 4px 14px rgba(3,19,52,0.05)",
+    border: "1px solid rgba(6,42,82,0.06)",
+    boxShadow: "0 4px 14px rgba(6,42,82,0.05)",
   },
   phone: {
     width: "100%",
@@ -1001,8 +1001,8 @@ const S = {
     background: "#fff",
     borderRadius: 26,
     overflow: "hidden",
-    boxShadow: "0 24px 60px rgba(3,19,52,0.16), 0 4px 14px rgba(3,19,52,0.08)",
-    border: "1px solid rgba(3,19,52,0.05)",
+    boxShadow: "0 24px 60px rgba(6,42,82,0.16), 0 4px 14px rgba(6,42,82,0.08)",
+    border: "1px solid rgba(6,42,82,0.05)",
   },
   chatHeader: {
     position: "relative",
@@ -1010,7 +1010,7 @@ const S = {
     alignItems: "center",
     gap: 12,
     padding: "16px 18px",
-    background: "linear-gradient(120deg,#031334 0%,#004A7B 55%,#00796E 100%)",
+    background: "linear-gradient(120deg,#062A52 0%,#0F5AA8 55%,#1E7BD6 100%)",
     color: "#fff",
     overflow: "hidden",
   },
@@ -1021,7 +1021,7 @@ const S = {
     width: 160,
     height: 160,
     borderRadius: "50%",
-    background: "radial-gradient(circle,rgba(0,246,165,0.35) 0%,rgba(0,246,165,0) 70%)",
+    background: "radial-gradient(circle,rgba(99,189,245,0.35) 0%,rgba(99,189,245,0) 70%)",
     pointerEvents: "none",
   },
   avatar: {
@@ -1032,13 +1032,13 @@ const S = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg,#00F6A5,#00A88F)",
-    boxShadow: "0 4px 14px rgba(0,246,165,0.4)",
+    background: "linear-gradient(135deg,#63BDF5,#2E90E4)",
+    boxShadow: "0 4px 14px rgba(99,189,245,0.4)",
     flexShrink: 0,
   },
   chatTitle: { fontFamily: "'Fredoka',sans-serif", fontWeight: 600, fontSize: 17 },
   status: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, opacity: 0.85, marginTop: 1 },
-  dot: { width: 7, height: 7, borderRadius: "50%", background: C.mint2, boxShadow: `0 0 8px ${C.mint2}`, display: "inline-block" },
+  dot: { width: 7, height: 7, borderRadius: "50%", background: C.sky, boxShadow: `0 0 8px ${C.sky}`, display: "inline-block" },
   thread: {
     flex: 1,
     overflowY: "auto",
@@ -1046,7 +1046,7 @@ const S = {
     display: "flex",
     flexDirection: "column",
     gap: 12,
-    background: "linear-gradient(180deg,#FBFDFC 0%,#F6FBFA 100%)",
+    background: "linear-gradient(180deg,#FAFCFF 0%,#F5FAFF 100%)",
   },
   typing: {
     display: "flex",
@@ -1059,13 +1059,13 @@ const S = {
     borderRadius: 16,
     borderBottomLeftRadius: 5,
   },
-  chipRow: { display: "flex", flexWrap: "wrap", gap: 8, padding: "0 16px 12px", background: "#F6FBFA" },
+  chipRow: { display: "flex", flexWrap: "wrap", gap: 8, padding: "0 16px 12px", background: "#F5FAFF" },
   chip: {
     fontFamily: "'Inter',sans-serif",
     fontSize: 12.5,
-    color: C.teal,
-    background: "#ECF7F4",
-    border: "1px solid #CDEAE3",
+    color: C.azure,
+    background: "#EAF3FD",
+    border: "1px solid #C5DDF5",
     borderRadius: 999,
     padding: "7px 12px",
     cursor: "pointer",
@@ -1081,8 +1081,8 @@ const S = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg,#00F6A5,#00A88F)",
-    boxShadow: "0 4px 12px rgba(0,168,143,0.35)",
+    background: "linear-gradient(135deg,#63BDF5,#2E90E4)",
+    boxShadow: "0 4px 12px rgba(46,144,228,0.35)",
     cursor: "pointer",
     transition: "opacity 0.15s",
   },
@@ -1091,14 +1091,14 @@ const S = {
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 * { box-sizing: border-box; }
-.ez-in:focus { border-color:${C.accTeal} !important; box-shadow:0 0 0 3px rgba(0,168,143,0.15); }
-.ez-chip:hover { background:#DDF2EC !important; transform:translateY(-1px); }
-.ez-add:hover { background:#E7F6F1 !important; }
-.ez-drop:hover { background:#E7F6F1 !important; border-color:#8FCBBD !important; }
+.ez-in:focus { border-color:${C.accent} !important; box-shadow:0 0 0 3px rgba(46,144,228,0.15); }
+.ez-chip:hover { background:#D6E9FA !important; transform:translateY(-1px); }
+.ez-add:hover { background:#E2F0FD !important; }
+.ez-drop:hover { background:#E2F0FD !important; border-color:#84BEEC !important; }
 .ez-del:hover { background:#FBE9E9 !important; }
 .ez-msg { animation: ezIn 0.28s ease both; }
 @keyframes ezIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
-.ez-td { width:6px;height:6px;border-radius:50%;background:${C.accTeal};display:inline-block;animation:ezB 1.2s infinite ease-in-out; }
+.ez-td { width:6px;height:6px;border-radius:50%;background:${C.accent};display:inline-block;animation:ezB 1.2s infinite ease-in-out; }
 .ez-td:nth-child(2){animation-delay:.15s;} .ez-td:nth-child(3){animation-delay:.3s;}
 @keyframes ezB { 0%,60%,100%{transform:translateY(0);opacity:.4;} 30%{transform:translateY(-5px);opacity:1;} }
 ::-webkit-scrollbar { width:7px; }

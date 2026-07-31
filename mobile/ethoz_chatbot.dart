@@ -1,4 +1,4 @@
-// Asisten Ethoz — layar chat untuk aplikasi mobile Ethoz (Flutter).
+// Ethoz Chat — layar chat untuk aplikasi mobile Ethoz (Flutter).
 //
 // Prasyarat pubspec.yaml:
 //   dependencies:
@@ -68,16 +68,16 @@ class ChatbotService {
 
 // ── Warna Ethoz ──────────────────────────────────────────────────
 class Ez {
-  static const navy = Color(0xFF031334);
-  static const blue = Color(0xFF004A7B);
-  static const teal = Color(0xFF00796E);
-  static const accTeal = Color(0xFF00A88F);
-  static const mint = Color(0xFF00F6A5);
-  static const ink = Color(0xFF0B1B2B);
-  static const muted = Color(0xFF6B7B87);
-  static const soft = Color(0xFFF3F8F7);
-  static const line = Color(0xFFE6EFEC);
-  static const bg = Color(0xFFF6FBFA);
+  static const navy = Color(0xFF062A52);
+  static const blue = Color(0xFF0F5AA8);
+  static const azure = Color(0xFF1E7BD6);
+  static const accent = Color(0xFF2E90E4);
+  static const sky = Color(0xFF63BDF5);
+  static const ink = Color(0xFF0A1A2B);
+  static const muted = Color(0xFF6B7E92);
+  static const soft = Color(0xFFF1F6FC);
+  static const line = Color(0xFFE3ECF5);
+  static const bg = Color(0xFFF5FAFF);
 }
 
 // ── Layar chat ───────────────────────────────────────────────────
@@ -100,7 +100,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
   final List<ChatMessage> _messages = [
     const ChatMessage(
       'assistant',
-      'Halo, saya Asisten Ethoz. Ada yang bisa saya bantu?',
+      'Halo, saya Ethoz Chat. Ada yang bisa saya bantu?',
     ),
   ];
 
@@ -190,7 +190,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Ez.navy, Ez.blue, Ez.teal],
+          colors: [Ez.navy, Ez.blue, Ez.azure],
         ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
       ),
@@ -201,7 +201,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
             height: 42,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(13),
-              gradient: const LinearGradient(colors: [Ez.mint, Ez.accTeal]),
+              gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
             ),
             child: const Icon(Icons.auto_awesome, color: Ez.navy, size: 22),
           ),
@@ -210,7 +210,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Asisten Ethoz',
+                'Ethoz Chat',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 17,
@@ -224,7 +224,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                     width: 7,
                     height: 7,
                     decoration: const BoxDecoration(
-                      color: Ez.mint,
+                      color: Ez.sky,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -270,7 +270,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
           decoration: BoxDecoration(
             gradient: bot
                 ? null
-                : const LinearGradient(colors: [Ez.accTeal, Ez.blue]),
+                : const LinearGradient(colors: [Ez.accent, Ez.blue]),
             color: bot ? Ez.soft : null,
             border: bot ? Border.all(color: Ez.line) : null,
             borderRadius: BorderRadius.only(
@@ -328,14 +328,14 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFECF7F4),
-                border: Border.all(color: const Color(0xFFCDEAE3)),
+                color: const Color(0xFFEAF3FD),
+                border: Border.all(color: const Color(0xFFC5DDF5)),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 c,
                 style: const TextStyle(
-                  color: Ez.teal,
+                  color: Ez.azure,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -368,16 +368,16 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                 hintText: 'Tulis pertanyaan Anda…',
                 hintStyle: const TextStyle(color: Ez.muted, fontSize: 14),
                 filled: true,
-                fillColor: const Color(0xFFF8FBFA),
+                fillColor: const Color(0xFFF7FAFE),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFDDE8E5)),
+                  borderSide: const BorderSide(color: Color(0xFFD7E3F2)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Ez.accTeal, width: 1.6),
+                  borderSide: const BorderSide(color: Ez.accent, width: 1.6),
                 ),
               ),
             ),
@@ -392,7 +392,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                 height: 46,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(colors: [Ez.mint, Ez.accTeal]),
+                  gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
                 ),
                 child: const Icon(Icons.send_rounded, color: Ez.navy, size: 22),
               ),
@@ -440,7 +440,7 @@ class _TypingDotsState extends State<_TypingDots>
               width: 6,
               height: 6,
               decoration: BoxDecoration(
-                color: Ez.accTeal.withOpacity(o.clamp(0.0, 1.0)),
+                color: Ez.accent.withOpacity(o.clamp(0.0, 1.0)),
                 shape: BoxShape.circle,
               ),
             );

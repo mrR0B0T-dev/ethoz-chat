@@ -1,6 +1,6 @@
 # Ethoz Chat
 
-Asisten AI untuk pegawai di dalam aplikasi **Ethoz** (Employee Self-Service HRIS). Pegawai bertanya seputar kebijakan perusahaan, layanan HR (cuti, presensi, e-slip), serta job description & struktur organisasi — cukup lewat login Ethoz yang sudah ada, **tanpa akun AI terpisah**.
+Asisten AI untuk pegawai di dalam aplikasi **Ethoz** (Employee Self-Service HCIS). Pegawai bertanya seputar kebijakan perusahaan, layanan HC (cuti, presensi, e-slip), serta job description & struktur organisasi — cukup lewat login Ethoz yang sudah ada, **tanpa akun AI terpisah**.
 
 ## Arsitektur
 
@@ -8,7 +8,7 @@ Asisten AI untuk pegawai di dalam aplikasi **Ethoz** (Employee Self-Service HRIS
 - **Admin (web)** — konsol untuk mengelola basis pengetahuan (termasuk unggah dokumen), akses per peran, batasan, dan gaya bahasa. Semua dikompilasi menjadi *system prompt*.
 - **Pegawai (Flutter)** — layar chat di aplikasi mobile Ethoz yang memanggil backend memakai token Sanctum. Lihat `mobile/`.
 
-Pemisahan peran: pegawai memakai chat di aplikasi, admin/HR mengelola isi lewat web. Otak yang sama berada di backend.
+Pemisahan peran: pegawai memakai chat di aplikasi, admin/HC mengelola isi lewat web. Otak yang sama berada di backend.
 
 ## Struktur folder
 

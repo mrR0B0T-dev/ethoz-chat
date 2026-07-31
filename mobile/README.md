@@ -1,6 +1,6 @@
 # Mobile (Flutter) — Ethoz Chat
 
-Layar chat Asisten Ethoz untuk aplikasi mobile Ethoz.
+Layar chat Ethoz Chat untuk aplikasi mobile Ethoz.
 
 - `ethoz_chatbot.dart` — layar `EthozChatbotScreen` + service pemanggil backend.
 - `main.dart` — entry point untuk menjalankan/menguji (memakai service tiruan agar UI bisa dicoba tanpa backend).
