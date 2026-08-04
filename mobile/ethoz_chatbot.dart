@@ -68,16 +68,16 @@ class ChatbotService {
 
 // ── Warna Ethoz ──────────────────────────────────────────────────
 class Ez {
-  static const navy = Color(0xFF062A52);
-  static const blue = Color(0xFF0F5AA8);
-  static const azure = Color(0xFF1E7BD6);
-  static const accent = Color(0xFF2E90E4);
-  static const sky = Color(0xFF63BDF5);
-  static const ink = Color(0xFF0A1A2B);
-  static const muted = Color(0xFF6B7E92);
-  static const soft = Color(0xFFF1F6FC);
-  static const line = Color(0xFFE3ECF5);
-  static const bg = Color(0xFFF5FAFF);
+  static const navy = Color(0xFF0A2A55);
+  static const blue = Color(0xFF1257A8);
+  static const azure = Color(0xFF1B6FD8);
+  static const accent = Color(0xFF2E8AE8);
+  static const sky = Color(0xFF5FAFF0);
+  static const ink = Color(0xFF0B1E33);
+  static const muted = Color(0xFF6B7C90);
+  static const soft = Color(0xFFF7F9FC);
+  static const line = Color(0xFFE4EAF2);
+  static const bg = Color(0xFFFFFFFF);
 }
 
 // ── Layar chat ───────────────────────────────────────────────────
@@ -328,8 +328,8 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF3FD),
-                border: Border.all(color: const Color(0xFFC5DDF5)),
+                color: const Color(0xFFF2F7FF),
+                border: Border.all(color: const Color(0xFFCFE0F5)),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
@@ -368,12 +368,12 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                 hintText: 'Tulis pertanyaan Anda…',
                 hintStyle: const TextStyle(color: Ez.muted, fontSize: 14),
                 filled: true,
-                fillColor: const Color(0xFFF7FAFE),
+                fillColor: const Color(0xFFFBFCFE),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFD7E3F2)),
+                  borderSide: const BorderSide(color: Color(0xFFDFE6EF)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),

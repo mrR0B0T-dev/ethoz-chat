@@ -314,17 +314,31 @@ class ChatbotService {
 }
 
 // ── Warna Ethoz ──────────────────────────────────────────────────
+/// Komposisi 60/30/10 — 60% putih & netral, 30% biru, 10% emas.
+///
+/// Emas hanya dipakai sebagai ISIAN dengan teks/ikon gelap di atasnya
+/// (tombol kirim, penanda aktif). Emas di atas putih tidak pernah dipakai
+/// untuk teks: kontrasnya hanya sekitar 1.7:1.
 class Ez {
-  static const navy = Color(0xFF062A52);
-  static const blue = Color(0xFF0F5AA8);
-  static const azure = Color(0xFF1E7BD6);
-  static const accent = Color(0xFF2E90E4);
-  static const sky = Color(0xFF63BDF5);
-  static const ink = Color(0xFF0A1A2B);
-  static const muted = Color(0xFF6B7E92);
-  static const soft = Color(0xFFF1F6FC);
-  static const line = Color(0xFFE3ECF5);
-  static const bg = Color(0xFFF5FAFF);
+  // 60% — dasar
+  static const bg = Color(0xFFFFFFFF);
+  static const soft = Color(0xFFF7F9FC);
+  static const line = Color(0xFFE4EAF2);
+  static const ink = Color(0xFF0B1E33);
+  static const muted = Color(0xFF6B7C90);
+
+  // 30% — biru struktural
+  static const navy = Color(0xFF0A2A55);
+  static const blue = Color(0xFF1257A8);
+  static const azure = Color(0xFF1B6FD8);
+  static const accent = Color(0xFF2E8AE8);
+  static const sky = Color(0xFF5FAFF0);
+
+  // 10% — emas
+  static const gold = Color(0xFFF2C230);
+  static const goldLight = Color(0xFFF6D256);
+  static const goldDeep = Color(0xFFE9B41C);
+  static const goldInk = Color(0xFF3E2E00);
 }
 
 // ── Layar chat ───────────────────────────────────────────────────
@@ -599,7 +613,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
         ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
         boxShadow: [
-          BoxShadow(color: Color(0x33062A52), blurRadius: 18, offset: Offset(0, 6)),
+          BoxShadow(color: Color(0x330A2A55), blurRadius: 18, offset: Offset(0, 6)),
         ],
       ),
       child: Row(
@@ -611,7 +625,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
               borderRadius: BorderRadius.circular(13),
               gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
               boxShadow: const [
-                BoxShadow(color: Color(0x5963BDF5), blurRadius: 14, offset: Offset(0, 4)),
+                BoxShadow(color: Color(0x595FAFF0), blurRadius: 14, offset: Offset(0, 4)),
               ],
             ),
             child: const Icon(Icons.auto_awesome, color: Ez.navy, size: 20),
@@ -633,14 +647,15 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                 const SizedBox(height: 2),
                 Row(
                   children: [
+                    // Penanda status emas — gema dari kartu presensi Ethoz.
                     Container(
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        color: Ez.sky,
+                        color: Ez.gold,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Ez.sky.withValues(alpha: .8), blurRadius: 7),
+                          BoxShadow(color: Ez.gold.withValues(alpha: .8), blurRadius: 7),
                         ],
                       ),
                     ),
@@ -712,7 +727,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
               borderRadius: BorderRadius.circular(20),
               gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
               boxShadow: const [
-                BoxShadow(color: Color(0x4463BDF5), blurRadius: 22, offset: Offset(0, 8)),
+                BoxShadow(color: Color(0x445FAFF0), blurRadius: 22, offset: Offset(0, 8)),
               ],
             ),
             child: const Icon(Icons.auto_awesome, color: Colors.white, size: 29),
@@ -810,7 +825,7 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                 boxShadow: bot
                     ? const [
                         BoxShadow(
-                          color: Color(0x0F062A52),
+                          color: Color(0x0F0A2A55),
                           blurRadius: 10,
                           offset: Offset(0, 3),
                         ),
@@ -1008,12 +1023,12 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
                 hintText: _busy ? 'Menunggu jawaban…' : 'Tulis pertanyaan Anda…',
                 hintStyle: const TextStyle(color: Ez.muted, fontSize: 14),
                 filled: true,
-                fillColor: const Color(0xFFF7FAFE),
+                fillColor: const Color(0xFFFBFCFE),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
-                  borderSide: const BorderSide(color: Color(0xFFD7E3F2)),
+                  borderSide: const BorderSide(color: Color(0xFFDFE6EF)),
                 ),
                 disabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
@@ -1033,6 +1048,8 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
     );
   }
 
+  /// Aksi utama — emas dengan ikon gelap, seperti tombol "Ke Absensi"
+  /// pada kartu presensi Ethoz.
   Widget _sendButton() {
     return Tooltip(
       message: 'Kirim',
@@ -1043,12 +1060,12 @@ class _EthozChatbotScreenState extends State<EthozChatbotScreen> {
           height: 47,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
-            gradient: const LinearGradient(colors: [Ez.sky, Ez.accent]),
+            gradient: const LinearGradient(colors: [Ez.goldLight, Ez.goldDeep]),
             boxShadow: const [
-              BoxShadow(color: Color(0x4D2E90E4), blurRadius: 12, offset: Offset(0, 4)),
+              BoxShadow(color: Color(0x59E9B41C), blurRadius: 12, offset: Offset(0, 4)),
             ],
           ),
-          child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
+          child: const Icon(Icons.arrow_upward_rounded, color: Ez.goldInk, size: 22),
         ),
       ),
     );

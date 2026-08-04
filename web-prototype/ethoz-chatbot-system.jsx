@@ -3,17 +3,17 @@ import * as mammothLib from "mammoth";
 
 // ══ Ethoz brand tokens ═══════════════════════════════════════════
 const C = {
-  navy: "#062A52",
-  blue: "#0F5AA8",
-  azure: "#1E7BD6",
-  skyAlt: "#8FD3FF",
-  sky: "#63BDF5",
-  accent: "#2E90E4",
-  ink: "#0A1A2B",
-  muted: "#6B7E92",
-  line: "#E3ECF5",
-  soft: "#F1F6FC",
-  field: "#F7FAFE",
+  navy: "#0A2A55",
+  blue: "#1257A8",
+  azure: "#1B6FD8",
+  skyAlt: "#8CC9F7",
+  sky: "#5FAFF0",
+  accent: "#2E8AE8",
+  ink: "#0B1E33",
+  muted: "#6B7C90",
+  line: "#E4EAF2",
+  soft: "#F7F9FC",
+  field: "#FBFCFE",
 };
 
 const ROLES = [
@@ -255,7 +255,7 @@ const Select = ({ value, onChange, options }) => (
 const Toggle = ({ on, onClick, label }) => (
   <div style={S.toggleRow} onClick={onClick}>
     <span style={S.toggleLabel}>{label}</span>
-    <span style={{ ...S.track, background: on ? C.accent : "#C7D5E4" }}>
+    <span style={{ ...S.track, background: on ? C.accent : "#CBD5E1" }}>
       <span style={{ ...S.knob, transform: on ? "translateX(18px)" : "translateX(0)" }} />
     </span>
   </div>
@@ -777,7 +777,7 @@ const S = {
   page: {
     minHeight: "100vh",
     boxSizing: "border-box",
-    background: "linear-gradient(165deg,#E8F2FD 0%,#F2F8FE 55%,#E9F1FB 100%)",
+    background: "linear-gradient(165deg,#FFFFFF 0%,#FFFFFF 55%,#FFFFFF 100%)",
     fontFamily: "'Inter',system-ui,-apple-system,sans-serif",
     color: C.ink,
     padding: "0 0 40px",
@@ -792,16 +792,16 @@ const S = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "14px 20px",
-    background: "linear-gradient(120deg,#062A52 0%,#0F5AA8 60%,#1E7BD6 100%)",
+    background: "linear-gradient(120deg,#0A2A55 0%,#1257A8 60%,#1B6FD8 100%)",
     color: "#fff",
-    boxShadow: "0 6px 20px rgba(6,42,82,0.18)",
+    boxShadow: "0 6px 20px rgba(10,42,85,0.18)",
   },
   brand: { display: "flex", alignItems: "center", gap: 10 },
   brandDot: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    background: "linear-gradient(135deg,#63BDF5,#2E90E4)",
+    background: "linear-gradient(135deg,#5FAFF0,#2E8AE8)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -836,8 +836,8 @@ const S = {
     background: "#fff",
     borderRadius: 18,
     padding: 18,
-    border: "1px solid rgba(6,42,82,0.06)",
-    boxShadow: "0 6px 18px rgba(6,42,82,0.05)",
+    border: "1px solid rgba(10,42,85,0.06)",
+    boxShadow: "0 6px 18px rgba(10,42,85,0.05)",
   },
   cardTitle: { fontFamily: "'Fredoka',sans-serif", fontWeight: 600, fontSize: 16, color: C.navy },
   cardDesc: { fontSize: 12.5, color: C.muted, marginTop: 2, lineHeight: 1.4 },
@@ -850,13 +850,13 @@ const S = {
     color: C.ink,
     padding: "10px 12px",
     borderRadius: 11,
-    border: "1px solid #D7E3F2",
+    border: "1px solid #DFE6EF",
     outline: "none",
     background: "#fff",
     transition: "border 0.15s, box-shadow 0.15s",
   },
   area: { resize: "vertical", lineHeight: 1.5, minHeight: 44 },
-  kbItem: { background: C.field, borderRadius: 13, padding: 12, border: "1px solid #DEE9F5" },
+  kbItem: { background: C.field, borderRadius: 13, padding: 12, border: "1px solid #E4EAF2" },
   dropzone: {
     display: "flex",
     flexDirection: "column",
@@ -864,8 +864,8 @@ const S = {
     textAlign: "center",
     padding: "20px 16px",
     borderRadius: 14,
-    border: "1.8px dashed #AFD2F0",
-    background: "#EFF7FE",
+    border: "1.8px dashed #BBD4F0",
+    background: "#F5F9FF",
     cursor: "pointer",
     transition: "background 0.15s, border-color 0.15s",
   },
@@ -873,7 +873,7 @@ const S = {
     width: 42,
     height: 42,
     borderRadius: 12,
-    background: "#DAEDFC",
+    background: "#E3F0FD",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -895,7 +895,7 @@ const S = {
     fontWeight: 700,
     letterSpacing: 0.3,
     color: "#fff",
-    background: "linear-gradient(135deg,#2E90E4,#0F5AA8)",
+    background: "linear-gradient(135deg,#2E8AE8,#1257A8)",
     padding: "3px 8px",
     borderRadius: 6,
     whiteSpace: "nowrap",
@@ -905,7 +905,7 @@ const S = {
     fontWeight: 700,
     letterSpacing: 0.3,
     color: C.muted,
-    background: "#E6EDF5",
+    background: "#EEF2F7",
     padding: "3px 8px",
     borderRadius: 6,
     whiteSpace: "nowrap",
@@ -926,8 +926,8 @@ const S = {
     width: "100%",
     padding: "11px",
     borderRadius: 12,
-    border: "1.5px dashed #AFD2F0",
-    background: "#EFF7FE",
+    border: "1.5px dashed #BBD4F0",
+    background: "#F5F9FF",
     color: C.azure,
     fontWeight: 600,
     fontSize: 13.5,
@@ -965,7 +965,7 @@ const S = {
   pre: {
     margin: 0,
     background: C.navy,
-    color: "#CFE6FF",
+    color: "#CFE3FF",
     padding: 14,
     borderRadius: 12,
     fontSize: 11.5,
@@ -988,8 +988,8 @@ const S = {
     background: "#fff",
     padding: "10px 16px",
     borderRadius: 14,
-    border: "1px solid rgba(6,42,82,0.06)",
-    boxShadow: "0 4px 14px rgba(6,42,82,0.05)",
+    border: "1px solid rgba(10,42,85,0.06)",
+    boxShadow: "0 4px 14px rgba(10,42,85,0.05)",
   },
   phone: {
     width: "100%",
@@ -1001,8 +1001,8 @@ const S = {
     background: "#fff",
     borderRadius: 26,
     overflow: "hidden",
-    boxShadow: "0 24px 60px rgba(6,42,82,0.16), 0 4px 14px rgba(6,42,82,0.08)",
-    border: "1px solid rgba(6,42,82,0.05)",
+    boxShadow: "0 24px 60px rgba(10,42,85,0.16), 0 4px 14px rgba(10,42,85,0.08)",
+    border: "1px solid rgba(10,42,85,0.05)",
   },
   chatHeader: {
     position: "relative",
@@ -1010,7 +1010,7 @@ const S = {
     alignItems: "center",
     gap: 12,
     padding: "16px 18px",
-    background: "linear-gradient(120deg,#062A52 0%,#0F5AA8 55%,#1E7BD6 100%)",
+    background: "linear-gradient(120deg,#0A2A55 0%,#1257A8 55%,#1B6FD8 100%)",
     color: "#fff",
     overflow: "hidden",
   },
@@ -1021,7 +1021,7 @@ const S = {
     width: 160,
     height: 160,
     borderRadius: "50%",
-    background: "radial-gradient(circle,rgba(99,189,245,0.35) 0%,rgba(99,189,245,0) 70%)",
+    background: "radial-gradient(circle,rgba(95,175,240,0.35) 0%,rgba(95,175,240,0) 70%)",
     pointerEvents: "none",
   },
   avatar: {
@@ -1032,8 +1032,8 @@ const S = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg,#63BDF5,#2E90E4)",
-    boxShadow: "0 4px 14px rgba(99,189,245,0.4)",
+    background: "linear-gradient(135deg,#5FAFF0,#2E8AE8)",
+    boxShadow: "0 4px 14px rgba(95,175,240,0.4)",
     flexShrink: 0,
   },
   chatTitle: { fontFamily: "'Fredoka',sans-serif", fontWeight: 600, fontSize: 17 },
@@ -1046,7 +1046,7 @@ const S = {
     display: "flex",
     flexDirection: "column",
     gap: 12,
-    background: "linear-gradient(180deg,#FAFCFF 0%,#F5FAFF 100%)",
+    background: "linear-gradient(180deg,#FFFFFF 0%,#FFFFFF 100%)",
   },
   typing: {
     display: "flex",
@@ -1059,13 +1059,13 @@ const S = {
     borderRadius: 16,
     borderBottomLeftRadius: 5,
   },
-  chipRow: { display: "flex", flexWrap: "wrap", gap: 8, padding: "0 16px 12px", background: "#F5FAFF" },
+  chipRow: { display: "flex", flexWrap: "wrap", gap: 8, padding: "0 16px 12px", background: "#FFFFFF" },
   chip: {
     fontFamily: "'Inter',sans-serif",
     fontSize: 12.5,
     color: C.azure,
-    background: "#EAF3FD",
-    border: "1px solid #C5DDF5",
+    background: "#F2F7FF",
+    border: "1px solid #CFE0F5",
     borderRadius: 999,
     padding: "7px 12px",
     cursor: "pointer",
@@ -1081,8 +1081,8 @@ const S = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg,#63BDF5,#2E90E4)",
-    boxShadow: "0 4px 12px rgba(46,144,228,0.35)",
+    background: "linear-gradient(135deg,#5FAFF0,#2E8AE8)",
+    boxShadow: "0 4px 12px rgba(46,138,232,0.35)",
     cursor: "pointer",
     transition: "opacity 0.15s",
   },
@@ -1091,10 +1091,10 @@ const S = {
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 * { box-sizing: border-box; }
-.ez-in:focus { border-color:${C.accent} !important; box-shadow:0 0 0 3px rgba(46,144,228,0.15); }
-.ez-chip:hover { background:#D6E9FA !important; transform:translateY(-1px); }
-.ez-add:hover { background:#E2F0FD !important; }
-.ez-drop:hover { background:#E2F0FD !important; border-color:#84BEEC !important; }
+.ez-in:focus { border-color:${C.accent} !important; box-shadow:0 0 0 3px rgba(46,138,232,0.15); }
+.ez-chip:hover { background:#DDEAF8 !important; transform:translateY(-1px); }
+.ez-add:hover { background:#EAF3FE !important; }
+.ez-drop:hover { background:#EAF3FE !important; border-color:#7FB4E8 !important; }
 .ez-del:hover { background:#FBE9E9 !important; }
 .ez-msg { animation: ezIn 0.28s ease both; }
 @keyframes ezIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
