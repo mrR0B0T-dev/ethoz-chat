@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -6,4 +7,1363 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Ethoz Chat — gaya konsol web (admin + login)
+   ───────────────────────────────────────────────────────────────────
+   Berkas ini satu-satunya sumber gaya untuk seluruh tampilan Blade.
+   Tidak ada lagi blok <style> maupun atribut style="..." statis.
+
+   Susunan:
+     1. Token merek (60% putih · 30% biru · 10% emas)
+     2. Dasar global
+     3. Komponen bersama konsol & pemantauan
+     4. Khusus konsol   (.page-console)
+     5. Khusus pemantauan (.page-monitor)
+     6. Khusus login    (.page-login)
+
+   Aturan tiap halaman dilingkupi kelas halaman pada <body> agar nama
+   kelas yang sama (.card, .btn, .brand) tetap berperilaku persis seperti
+   sebelum digabung.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Token merek ─────────────────────────────────────────────── */
+:root {
+    --white: #FFFFFF;
+    --soft: #F7F9FC;
+    --field: #FBFCFE;
+    --line: #E4EAF2;
+    --ink: #0B1E33;
+    --muted: #6B7C90;
+    --navy: #0A2A55;
+    --blue: #1257A8;
+    --azure: #1B6FD8;
+    --accent: #2E8AE8;
+    --sky: #5FAFF0;
+    --gold: #F2C230;
+    --gold-dk: #DCA916;
+    --gold-ink: #3E2E00;
+    --danger: #C0554F;
+    --grad-brand: linear-gradient(120deg, #0A2A55 0%, #1257A8 60%, #1B6FD8 100%);
+    --grad-accent: linear-gradient(135deg, #2E8AE8, #1257A8);
+    --grad-sky: linear-gradient(135deg, #5FAFF0, #2E8AE8);
+    --grad-gold: linear-gradient(135deg, #F6D256, #E9B41C);
+    --r-sm: 9px;
+    --r-md: 12px;
+    --r-lg: 14px;
+    --r-xl: 18px;
+    --sh-card: 0 6px 18px rgba(10, 42, 85, .05);
+    --sh-lift: 0 10px 26px rgba(10, 42, 85, .09);
+    --sh-bar: 0 6px 20px rgba(10, 42, 85, .18);
+    --ring: 0 0 0 3px rgba(46, 138, 232, .18);
+    --ease: cubic-bezier(.22, .61, .36, 1);
+    --good: #1E8E6A;
+    --warn: #D9A404;
+    --crit: #C0392B;
+}
+
+/* ── 2. Dasar global ────────────────────────────────────────────── */
+* {
+    box-sizing: border-box;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Preflight Tailwind menghapus butir daftar; halaman login mengandalkannya
+   untuk menampilkan galat validasi, jadi dikembalikan secara eksplisit. */
+.page-login .err ul {
+    list-style: disc;
+}
+
+
+
+/* ── 3. Komponen bersama konsol & pemantauan ────────────────────── */
+
+body.page-console,
+body.page-monitor {
+    margin: 0;
+    min-height: 100vh;
+    padding-bottom: 60px;
+    background: var(--white);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Topbar ────────────────────────────────────────────────── */
+.page-console .topbar,
+.page-monitor .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 20px;
+    color: #fff;
+    background: var(--grad-brand);
+    box-shadow: var(--sh-bar);
+}
+
+.page-console .brand .dot,
+.page-monitor .brand .dot {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--grad-sky);
+    box-shadow: 0 4px 14px rgba(95, 175, 240, .35);
+}
+
+/* Perpindahan antar halaman admin — mengikuti pola segmented control
+           pada prototipe web Ethoz. */
+.page-console .seg,
+.page-monitor .seg {
+    display: flex;
+    background: rgba(255, 255, 255, .14);
+    border-radius: var(--r-md);
+    padding: 4px;
+    gap: 4px;
+}
+
+.page-console .seg a:hover,
+.page-monitor .seg a:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, .12);
+}
+
+.page-console .seg a.on,
+.page-monitor .seg a.on {
+    background: #fff;
+    color: var(--navy);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+}
+
+.page-console .bar-actions,
+.page-monitor .bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.page-console .who,
+.page-monitor .who {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px 6px 7px;
+    border-radius: 999px;
+    /* Kaca buram di atas biru — mengikuti kartu presensi Ethoz. */
+    background: rgba(255, 255, 255, .18);
+    border: 1px solid rgba(255, 255, 255, .28);
+    backdrop-filter: blur(6px);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.page-console .who .av,
+.page-monitor .who .av {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--grad-sky);
+    color: var(--navy);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.page-console .bar-actions form,
+.page-monitor .bar-actions form {
+    margin: 0
+}
+
+.page-console .card h2,
+.page-monitor .card h2 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--navy);
+    margin: 0;
+}
+
+/* Aksen kecil di kiri judul — porsi emas yang tersebar merata. */
+.page-console .card h2::before,
+.page-monitor .card h2::before {
+    content: '';
+    width: 4px;
+    height: 17px;
+    border-radius: 999px;
+    background: var(--grad-gold);
+    flex: 0 0 auto;
+}
+
+.page-console .card .desc,
+.page-monitor .card .desc {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 3px 0 0 13px;
+    line-height: 1.45;
+}
+
+.page-console .muted,
+.page-monitor .muted {
+    color: var(--muted)
+}
+
+.page-console .small,
+.page-monitor .small {
+    font-size: 11.5px
+}
+
+.page-console .btn.quiet,
+.page-monitor .btn.quiet {
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid rgba(255, 255, 255, .24);
+    backdrop-filter: blur(6px);
+    font-weight: 500;
+}
+
+.page-console .topbar :focus-visible,
+.page-monitor .topbar :focus-visible {
+    outline-color: var(--sky)
+}
+
+
+/* ── 4. Khusus konsol ───────────────────────────────────────────── */
+
+html {
+    scroll-behavior: smooth
+}
+
+.page-console .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+}
+
+.page-console .brand h1 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    margin: 0;
+    line-height: 1.15;
+    letter-spacing: .1px;
+}
+
+.page-console .brand .sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    font-size: 11.5px;
+    opacity: .85;
+}
+
+/* Titik "aktif" — emas, seperti penanda status di kartu presensi. */
+.page-console .live {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 8px var(--gold);
+}
+
+.page-console .seg a {
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, .85);
+    font: 600 13.5px 'Inter', sans-serif;
+    padding: 7px 14px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all .15s var(--ease);
+}
+
+/* ── Kartu & tipografi ─────────────────────────────────────── */
+.page-console .wrap {
+    max-width: 780px;
+    margin: 24px auto 0;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.page-console .card {
+    background: #fff;
+    border-radius: var(--r-xl);
+    padding: 18px;
+    border: 1px solid rgba(10, 42, 85, .06);
+    box-shadow: var(--sh-card);
+    transition: box-shadow .22s var(--ease), transform .22s var(--ease);
+}
+
+.page-console .card:hover {
+    box-shadow: var(--sh-lift);
+}
+
+.page-console label.lbl {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    margin: 13px 0 5px;
+}
+
+/* ── Kontrol form ──────────────────────────────────────────── */
+.page-console .in {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    color: var(--ink);
+    padding: 10px 12px;
+    border-radius: 11px;
+    border: 1px solid #DFE6EF;
+    outline: none;
+    background: #fff;
+    transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
+}
+
+.page-console .in:hover:not(:focus) {
+    border-color: #C9D6E6
+}
+
+.page-console .in:focus {
+    border-color: var(--accent);
+    box-shadow: var(--ring);
+}
+
+.page-console .in::placeholder {
+    color: #9FAEC0
+}
+
+.page-console select.in {
+    cursor: pointer;
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7B87' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 11px center;
+}
+
+.page-console textarea.in {
+    resize: vertical;
+    line-height: 1.55;
+    min-height: 44px;
+}
+
+.page-console .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.page-console .row.end {
+    justify-content: flex-end
+}
+
+/* ── Sakelar ───────────────────────────────────────────────── */
+.page-console .toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+}
+
+.page-console .toggle:hover span:first-child {
+    color: var(--azure)
+}
+
+.page-console .toggle span {
+    font-size: 13.5px;
+    transition: color .16s var(--ease);
+}
+
+.page-console .sw {
+    position: relative;
+    width: 38px;
+    height: 22px;
+    flex: 0 0 auto;
+}
+
+.page-console .sw input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+
+.page-console .sw .tr {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: #CBD5E1;
+    transition: background .18s var(--ease);
+    pointer-events: none;
+}
+
+.page-console .sw .kn {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+    transition: transform .18s var(--ease);
+}
+
+.page-console .sw input:checked+.tr {
+    background: var(--accent)
+}
+
+.page-console .sw input:checked+.tr .kn {
+    transform: translateX(16px)
+}
+
+.page-console .sw input:focus-visible+.tr {
+    box-shadow: var(--ring)
+}
+
+/* ── Tombol ────────────────────────────────────────────────── */
+.page-console .btn {
+    border: none;
+    border-radius: 11px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    background: var(--grad-accent);
+    padding: 10px 16px;
+    font-size: 13.5px;
+    transition: transform .16s var(--ease), box-shadow .16s var(--ease), opacity .16s var(--ease);
+}
+
+.page-console .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(18, 87, 168, .28);
+}
+
+.page-console .btn:active {
+    transform: translateY(0)
+}
+
+.page-console .btn.sm {
+    padding: 8px 14px;
+    font-size: 12.5px;
+}
+
+/* Aksi utama di topbar — emas dengan teks gelap, seperti tombol
+           "Ke Absensi" pada kartu presensi Ethoz. */
+.page-console .btn.ghost {
+    background: var(--grad-gold);
+    border: none;
+    color: var(--gold-ink);
+    box-shadow: 0 3px 10px rgba(220, 169, 22, .35);
+}
+
+.page-console .btn.ghost:hover {
+    background: var(--gold);
+    box-shadow: 0 6px 16px rgba(220, 169, 22, .45);
+}
+
+.page-console .btn.quiet:hover {
+    background: rgba(255, 255, 255, .16);
+    box-shadow: none;
+}
+
+.page-console .btn[disabled] {
+    opacity: .6;
+    cursor: progress;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ── Unggah dokumen ────────────────────────────────────────── */
+.page-console .dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 22px 16px;
+    border-radius: var(--r-lg);
+    border: 1.8px dashed #BBD4F0;
+    background: #F5F9FF;
+    cursor: pointer;
+    transition: background .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+}
+
+.page-console .dropzone:hover,
+.page-console .dropzone.over {
+    background: #EAF3FE;
+    border-color: #7FB4E8;
+}
+
+.page-console .dropzone.over {
+    transform: scale(1.01);
+    border-color: var(--accent);
+}
+
+.page-console .dropIcon {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--r-md);
+    background: #E3F0FD;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    transition: transform .18s var(--ease);
+}
+
+.page-console .dropzone:hover .dropIcon {
+    transform: translateY(-2px)
+}
+
+/* ── Entri basis pengetahuan ───────────────────────────────── */
+.page-console .kb {
+    background: var(--field);
+    border-radius: 13px;
+    padding: 12px;
+    border: 1px solid #E4EAF2;
+    margin-top: 12px;
+    transition: border-color .18s var(--ease), background .18s var(--ease);
+}
+
+.page-console .kb:hover {
+    border-color: #D3DFEC
+}
+
+.page-console .kb-head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.page-console .badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.page-console .badge.doc {
+    color: #fff;
+    background: var(--grad-accent);
+}
+
+.page-console .badge.man {
+    color: var(--muted);
+    background: #EEF2F7;
+}
+
+.page-console .del {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    border: 1px solid #F0D8D8;
+    background: #FDF3F3;
+    color: var(--danger);
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: background .16s var(--ease);
+}
+
+.page-console .del:hover {
+    background: #FBE9E9
+}
+
+.page-console .add {
+    margin-top: 12px;
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--r-md);
+    border: 1.5px dashed #BBD4F0;
+    background: #F5F9FF;
+    color: var(--azure);
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: background .16s var(--ease), border-color .16s var(--ease);
+}
+
+.page-console .add:hover {
+    background: #EAF3FE;
+    border-color: #7FB4E8;
+}
+
+/* Kerangka muat — kartu tidak lagi tampak kosong/rusak selagi memuat. */
+.page-console .skel {
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--soft) 25%, #F1F5FA 37%, var(--soft) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+            0% {
+                background-position: 100% 0
+            }
+
+            100% {
+                background-position: 0 0
+            }
+}
+
+.page-console .skel-row {
+    height: 38px;
+    margin-top: 10px;
+}
+
+/* Kondisi kosong — jangan biarkan kartu terasa "rusak" saat belum ada isi. */
+.page-console .empty {
+    margin-top: 12px;
+    padding: 20px 16px;
+    border-radius: 13px;
+    background: var(--soft);
+    border: 1px solid var(--line);
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+/* ── Pratinjau ─────────────────────────────────────────────── */
+.page-console pre.out {
+    margin: 10px 0 0;
+    background: var(--navy);
+    color: #CFE3FF;
+    padding: 14px;
+    border-radius: var(--r-md);
+    font-size: 11.5px;
+    line-height: 1.55;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 340px;
+    overflow: auto;
+}
+
+.page-console pre.out.idle {
+    color: #7B93AE
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+.page-console #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    opacity: 0;
+    background: var(--navy);
+    color: #fff;
+    padding: 11px 18px;
+    border-radius: var(--r-md);
+    font-size: 13.5px;
+    box-shadow: 0 8px 24px rgba(10, 42, 85, .3);
+    transition: opacity .25s var(--ease), transform .25s var(--ease);
+    pointer-events: none;
+    z-index: 20;
+    max-width: 90%;
+}
+
+.page-console #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.page-console #toast.err {
+    background: #8A2F2A
+}
+
+/* ── Layar kecil ───────────────────────────────────────────── */
+@media (max-width: 560px) {
+    .page-console .topbar {
+        padding: 12px 14px
+    }
+
+    .page-console .bar-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .page-console .who {
+        margin-right: auto
+    }
+
+    .page-console .wrap {
+        margin-top: 16px;
+        padding: 0 12px;
+    }
+
+    .page-console .card {
+        padding: 15px
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto
+    }
+
+    .page-console * {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+
+/* ── 5. Khusus pemantauan ───────────────────────────────────────── */
+
+.page-monitor .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px
+}
+
+.page-monitor .brand h1 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    margin: 0;
+    line-height: 1.15;
+}
+
+.page-monitor .brand .sub {
+    margin-top: 2px;
+    font-size: 11.5px;
+    opacity: .85
+}
+
+.page-monitor .seg a {
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, .85);
+    font: 600 13.5px 'Inter', sans-serif;
+    padding: 7px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all .15s var(--ease);
+}
+
+.page-monitor .btn {
+    border: none;
+    border-radius: 11px;
+    font: 600 13.5px 'Inter', sans-serif;
+    cursor: pointer;
+    color: #fff;
+    background: var(--grad-accent);
+    padding: 10px 16px;
+    transition: all .16s var(--ease);
+}
+
+.page-monitor .btn.quiet:hover {
+    background: rgba(255, 255, 255, .16)
+}
+
+/* ── Tata letak ────────────────────────────────────────── */
+.page-monitor .wrap {
+    max-width: 1040px;
+    margin: 22px auto 0;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.page-monitor .card {
+    background: #fff;
+    border-radius: var(--r-xl);
+    padding: 18px;
+    border: 1px solid rgba(10, 42, 85, .06);
+    box-shadow: var(--sh-card);
+}
+
+/* Penyaring rentang — satu baris di atas seluruh grafik. */
+.page-monitor .filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap
+}
+
+.page-monitor .chip {
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--muted);
+    font: 500 12.5px 'Inter', sans-serif;
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .16s var(--ease);
+}
+
+.page-monitor .chip:hover {
+    border-color: var(--accent);
+    color: var(--azure)
+}
+
+/* Keadaan aktif memakai emas — sejalan dengan navigasi aktif di aplikasi. */
+.page-monitor .chip.on {
+    background: var(--grad-gold);
+    border-color: var(--gold-dk);
+    color: var(--gold-ink);
+    font-weight: 600;
+}
+
+/* ── Ubin statistik (angka utama, bukan grafik) ────────── */
+.page-monitor .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px
+}
+
+.page-monitor .tile {
+    background: #fff;
+    border-radius: var(--r-xl);
+    padding: 15px 16px;
+    border: 1px solid rgba(10, 42, 85, .06);
+    box-shadow: var(--sh-card);
+}
+
+/* min-height menyamakan garis dasar angka walau labelnya turun ke baris kedua. */
+.page-monitor .tile .k {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-weight: 500;
+    min-height: 30px;
+    line-height: 1.3
+}
+
+.page-monitor .tile .v {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 25px;
+    color: var(--navy);
+    line-height: 1.15;
+    margin-top: 5px;
+}
+
+.page-monitor .tile .u {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    margin-left: 3px
+}
+
+.page-monitor .tile .n {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 3px
+}
+
+/* ── Grafik batang harian (satu seri: tanpa legenda) ───── */
+.page-monitor .chart {
+    margin-top: 14px
+}
+
+.page-monitor .plot {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 150px;
+    padding-top: 6px;
+    border-bottom: 1px solid var(--line);
+    /* sumbu resesif */
+}
+
+.page-monitor .bar {
+    flex: 1 1 0;
+    min-width: 3px;
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    cursor: default
+}
+
+.page-monitor .bar i {
+    display: block;
+    width: 100%;
+    background: var(--azure);
+    border-radius: 4px 4px 0 0;
+    /* ujung data membulat 4px */
+    transition: background .14s var(--ease);
+    min-height: 2px;
+}
+
+.page-monitor .bar[data-zero="1"] i {
+    background: var(--line)
+}
+
+.page-monitor .bar:hover i {
+    background: var(--navy)
+}
+
+.page-monitor .xaxis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 7px
+}
+
+.page-monitor .xaxis span {
+    font-size: 11px;
+    color: var(--muted)
+}
+
+/* ── Rincian hasil (3 status: legenda + label langsung) ── */
+.page-monitor .stack {
+    display: flex;
+    gap: 2px;
+    margin-top: 14px;
+    height: 26px;
+    border-radius: 6px;
+    overflow: hidden
+}
+
+.page-monitor .stack i {
+    display: block;
+    height: 100%;
+    min-width: 3px
+}
+
+.page-monitor .sw-good {
+    background: var(--good)
+}
+
+.page-monitor .sw-warn {
+    background: var(--warn)
+}
+
+.page-monitor .sw-crit {
+    background: var(--crit)
+}
+
+.page-monitor .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 12px
+}
+
+.page-monitor .legend div {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px
+}
+
+.page-monitor .legend b {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    flex: 0 0 auto
+}
+
+.page-monitor .legend span {
+    color: var(--muted)
+}
+
+.page-monitor .legend strong {
+    color: var(--ink);
+    font-weight: 600
+}
+
+/* ── Daftar peringkat & celah ──────────────────────────── */
+.page-monitor .cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px
+}
+
+@media (max-width: 780px) {
+    .page-monitor .cols {
+        grid-template-columns: 1fr
+    }
+}
+
+.page-monitor .rank {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px
+}
+
+.page-monitor .rank .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px
+}
+
+.page-monitor .rank .name {
+    flex: 0 0 42%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.page-monitor .rank .track {
+    flex: 1;
+    height: 9px;
+    background: var(--soft);
+    border-radius: 999px;
+    overflow: hidden
+}
+
+.page-monitor .rank .fill {
+    height: 100%;
+    background: var(--azure);
+    border-radius: 999px
+}
+
+.page-monitor .rank .n {
+    color: var(--muted);
+    min-width: 24px;
+    text-align: right
+}
+
+.page-monitor .gap-item {
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--line);
+    font-size: 12.5px;
+    margin-top: 8px;
+}
+
+.page-monitor .gap-item .when {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 3px
+}
+
+/* ── Tabel percakapan ──────────────────────────────────── */
+.page-monitor .tablewrap {
+    overflow-x: auto;
+    margin-top: 12px
+}
+
+.page-monitor table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    min-width: 620px
+}
+
+.page-monitor th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.page-monitor td {
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle
+}
+
+.page-monitor tbody tr {
+    cursor: pointer;
+    transition: background .14s var(--ease)
+}
+
+.page-monitor tbody tr:hover {
+    background: var(--soft)
+}
+
+.page-monitor .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.page-monitor .pill.ok {
+    color: #10553F;
+    background: #DCF2EA
+}
+
+.page-monitor .pill.gap {
+    color: #7A5B02;
+    background: #FBF0CE
+}
+
+.page-monitor .pill.err {
+    color: #8A2F2A;
+    background: #FBE3E1
+}
+
+/* ── Tooltip & transkrip ───────────────────────────────── */
+.page-monitor #tip {
+    position: fixed;
+    z-index: 40;
+    pointer-events: none;
+    opacity: 0;
+    background: var(--navy);
+    color: #fff;
+    padding: 7px 11px;
+    border-radius: 9px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    box-shadow: 0 8px 24px rgba(10, 42, 85, .3);
+    transition: opacity .12s var(--ease);
+    white-space: nowrap;
+}
+
+.page-monitor #tip.on {
+    opacity: 1
+}
+
+.page-monitor .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: none;
+    background: rgba(10, 42, 85, .45);
+    padding: 24px 16px;
+    overflow: auto;
+}
+
+.page-monitor .sheet.on {
+    display: block
+}
+
+.page-monitor .sheet .inner {
+    max-width: 680px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: var(--r-xl);
+    padding: 20px;
+}
+
+.page-monitor .msg {
+    padding: 11px 13px;
+    border-radius: 13px;
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.5
+}
+
+.page-monitor .msg.user {
+    background: var(--soft);
+    border: 1px solid var(--line)
+}
+
+.page-monitor .msg.bot {
+    background: #fff;
+    border: 1px solid var(--line)
+}
+
+.page-monitor .msg .meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 7px
+}
+
+.page-monitor .empty {
+    margin-top: 12px;
+    padding: 22px 16px;
+    border-radius: 13px;
+    background: var(--soft);
+    border: 1px solid var(--line);
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page-monitor * {
+        transition: none !important
+    }
+}
+
+
+/* ── 6. Khusus login ────────────────────────────────────────────── */
+
+body.page-login {
+    margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:24px;background:var(--white);
+    font-family:'Inter',system-ui,sans-serif;color:var(--ink)
+}
+
+.page-login .card {
+    width:100%;max-width:380px;background:#fff;border-radius:18px;padding:26px;
+    border:1px solid var(--line);box-shadow:0 8px 24px rgba(10,42,85,.07)
+}
+
+.page-login .brand {
+    display:flex;align-items:center;gap:10px;margin-bottom:18px
+}
+
+/* Lencana emas — satu-satunya aksen 10% di halaman ini. */
+.page-login .brand .dot {
+    width:38px;height:38px;border-radius:11px;display:flex;align-items:center;
+    justify-content:center;background:linear-gradient(135deg,#F6D256,#E9B41C);
+    color:var(--gold-ink);font-size:19px
+}
+
+.page-login .brand h1 {
+    font-family:'Fredoka',sans-serif;font-weight:600;font-size:17px;margin:0;line-height:1.15;color:var(--navy)
+}
+
+.page-login .brand small {
+    font-size:11.5px;color:var(--muted)
+}
+
+.page-login label.lbl {
+    display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px
+}
+
+.page-login .in {
+    width:100%;font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink);
+    padding:10px 12px;border-radius:11px;border:1px solid #DFE6EF;outline:none;background:#fff
+}
+
+.page-login .in:focus {
+    border-color:var(--accent);box-shadow:0 0 0 3px rgba(46,138,232,.15)
+}
+
+.page-login .btn {
+    margin-top:18px;width:100%;border:none;border-radius:11px;font-family:'Inter',sans-serif;
+    font-weight:600;cursor:pointer;color:#fff;padding:11px 16px;font-size:13.5px;
+    background:linear-gradient(135deg,#2E8AE8,#1257A8)
+}
+
+.page-login .err {
+    margin:14px 0 0;padding:10px 12px;border-radius:11px;background:#FDF3F3;
+    border:1px solid #F0D8D8;color:#C0554F;font-size:12.5px;line-height:1.45
+}
+
+.page-login .err ul {
+    margin:0;padding-left:16px
+}
+
+.page-login .remember {
+    display:flex;align-items:center;gap:7px;margin-top:14px;font-size:12.5px;color:var(--muted)
+}
+
+
+/* ── 7. Kelas pengganti atribut style="..." ─────────────────────────
+   Semua aturan di bawah ini menggantikan gaya sebaris yang dulu menempel
+   di markup. Nilainya disalin apa adanya agar tampilan tidak berubah. */
+
+/* Konsol */
+.page-console .row--spaced { margin: 12px 0; }
+.page-console .in--auto { width: auto; }
+.page-console .is-hidden { display: none; }
+
+.page-console .dropzone-title {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--navy);
+}
+
+.page-console .dropzone-hint { margin-top: 3px; }
+.page-console .dropzone-note { margin-top: 2px; }
+
+.page-console .kb-title {
+    flex: 1;
+    font-weight: 600;
+}
+
+.page-console .kb-meta { margin-top: 6px; }
+.page-console .kb-scope { flex: 1; }
+.page-console .kb-content { margin-top: 8px; }
+
+/* Pemantauan */
+.page-monitor .range-note { margin-left: auto; }
+.page-monitor .filters--spaced { margin-top: 12px; }
+
+.page-monitor .sheet-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-monitor .sheet-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 16px;
+    color: var(--navy);
+    margin: 0;
+}
+
+.page-monitor .stack-empty {
+    width: 100%;
+    background: var(--line);
+}
+
+.page-monitor .msg-body {
+    margin-top: 5px;
+    white-space: pre-wrap;
+}
+
+/* ── 8. Nilai dinamis lewat custom property ─────────────────────────
+   Tiga ukuran ini dihitung dari data saat runtime, jadi TIDAK boleh
+   dijadikan nilai tetap. Markup hanya menyetel variabelnya; besarannya
+   dibaca di sini. Nilai cadangan 0% dipakai bila variabel belum diset. */
+
+/* Tinggi batang volume harian — disetel di renderDaily(). */
+.page-monitor .plot .bar i { height: var(--bar-height, 0%); }
+
+/* Lebar segmen rincian hasil — disetel di renderOutcomes(). */
+.page-monitor .stack i { width: var(--seg-width, 0%); }
+
+/* Lebar batang dokumen paling dirujuk — disetel di renderSources(). */
+.page-monitor .rank .fill { width: var(--fill-width, 0%); }
+
+/* ── 9. Penyelarasan preflight Tailwind ─────────────────────────────
+   app.css kini memuat @import 'tailwindcss', sehingga preflight-nya ikut
+   berlaku di halaman-halaman ini — padahal dulu mereka sama sekali tidak
+   memuat Tailwind. Preflight menyetel line-height: 1.5 pada <html>,
+   sedangkan semula halaman mengikuti bawaan peramban (normal); akibatnya
+   tiap baris menjadi lebih tinggi dan seluruh halaman merenggang ke bawah.
+   (Butir daftar yang juga dihapus preflight dipulihkan di bagian 2.) */
+body.page-console,
+body.page-monitor,
+body.page-login {
+    line-height: normal;
 }
