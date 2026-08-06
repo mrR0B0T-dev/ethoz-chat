@@ -586,6 +586,70 @@ html {
     background: #EEF2F7;
 }
 
+/* Status ekstraksi — dokumen hasil pindai diproses di antrean, jadi entrinya
+   sudah terlihat sebelum isinya siap. */
+.page-console .badge.st-wait {
+    color: var(--gold-ink);
+    background: var(--grad-gold);
+}
+
+.page-console .badge.st-run {
+    color: #fff;
+    background: var(--grad-sky);
+}
+
+.page-console .badge.st-fail {
+    color: #fff;
+    background: var(--danger);
+}
+
+.page-console .kb-note {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    background: var(--soft);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.page-console .kb-note.bad {
+    background: #FDF3F3;
+    border-color: #F0D8D8;
+    color: #8E3B36;
+}
+
+/* Baris pengganti kotak isi selagi teksnya belum ada. */
+.page-console .proc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: var(--r-md);
+    background: #F5F9FF;
+    border: 1px dashed #BBD4F0;
+    color: var(--blue);
+    font-size: 12.5px;
+}
+
+.page-console .spin {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    border: 2px solid #BBD4F0;
+    border-top-color: var(--azure);
+    animation: kb-spin .8s linear infinite;
+}
+
+@keyframes kb-spin {
+    to {
+        transform: rotate(360deg)
+    }
+}
+
 .page-console .del {
     width: 32px;
     height: 32px;

@@ -26,6 +26,9 @@ class DocumentTextExtractor
     /** Alasan sebagian isi tidak terbaca — dibaca controller untuk pesan ke admin. */
     protected ?string $notice = null;
 
+    /** Apakah sebagian teks berasal dari OCR — ikut dilaporkan ke admin. */
+    protected bool $usedOcr = false;
+
     public function __construct(protected OcrService $ocr) {}
 
     /** Format yang bisa diproses, dipakai juga untuk aturan validasi unggahan. */
@@ -39,9 +42,15 @@ class DocumentTextExtractor
         return $this->notice;
     }
 
+    public function usedOcr(): bool
+    {
+        return $this->usedOcr;
+    }
+
     public function extract(string $path, string $ext): string
     {
         $this->notice = null;
+        $this->usedOcr = false;
 
         $text = match (strtolower($ext)) {
             'pdf' => $this->pdf($path),
@@ -77,10 +86,16 @@ class DocumentTextExtractor
         $text = implode(PHP_EOL.PHP_EOL, $pages);
 
         // Sedikit/tanpa teks => besar kemungkinan hasil pindai. Coba OCR.
+        //
+        // Urutannya sengaja begini: lapisan teks asli selalu lebih cepat dan
+        // lebih akurat daripada OCR, jadi ia tidak pernah diganti selama ada.
+        // OCR hanya menambal halaman yang memang tidak punya teks.
         if ($this->looksScanned($text, $pageCount)) {
             $ocr = $this->ocr->scannedPdf($path);
 
             if ($ocr !== '') {
+                $this->usedOcr = true;
+
                 // Gabungkan: sebagian PDF punya teks pada sebagian halaman saja.
                 return trim($text) === '' ? $ocr : $text.PHP_EOL.PHP_EOL.$ocr;
             }
@@ -142,6 +157,7 @@ class DocumentTextExtractor
         // Gambar yang disisipkan di dalam dokumen (mis. bagan, tabel hasil pindai).
         $fromImages = $this->docxImages($path);
         if ($fromImages !== '') {
+            $this->usedOcr = true;
             $text = trim($text) === '' ? $fromImages : $text.PHP_EOL.PHP_EOL.$fromImages;
         }
 
@@ -445,8 +461,13 @@ class DocumentTextExtractor
 
         if ($text === '') {
             $this->notice = $this->ocr->unavailableReason()
-                ?? 'Tidak ada teks yang terbaca di dalam gambar ini.';
+                ?? 'Tidak ada teks yang terbaca di dalam gambar ini. Pastikan hasil pindainya '
+                    .'tegak, tidak buram, dan cukup terang.';
+
+            return '';
         }
+
+        $this->usedOcr = true;
 
         return $text;
     }

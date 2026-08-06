@@ -90,8 +90,8 @@
                 <div class="muted small dropzone-hint">Klik atau seret ke sini · PDF, DOCX, TXT, MD, CSV,
                     gambar
                 </div>
-                <div class="muted small dropzone-note">Tabel ikut terbaca. Dokumen hasil pindai dibaca lewat
-                    OCR.
+                <div class="muted small dropzone-note">Tabel ikut terbaca. Dokumen hasil pindai dan gambar
+                    dibaca lewat OCR — prosesnya berjalan di latar, statusnya muncul di daftar.
                 </div>
             </div>
 
@@ -307,6 +307,8 @@
                         headers: ACCEPT
                     });
                     renderKB();
+                    // Unggahan dari sesi/tab lain bisa saja masih berjalan.
+                    if (KB.some(isPending)) watchStatuses();
                 } catch (e) {
                     toast('Gagal memuat pengetahuan: ' + shorten(e.message), false);
                 }
@@ -315,6 +317,30 @@
             function badge(src) {
                 return src === 'document' ?
                     '<span class="badge doc">Dokumen</span>' : '<span class="badge man">Manual</span>';
+            }
+
+            /* Status ekstraksi — dokumen besar/hasil pindai diproses di antrean,
+               jadi entri bisa terlihat sebelum isinya siap. */
+            const STATUS = {
+                queued: {
+                    label: 'Antre',
+                    cls: 'st-wait'
+                },
+                processing: {
+                    label: 'Diproses',
+                    cls: 'st-run'
+                },
+                failed: {
+                    label: 'Gagal',
+                    cls: 'st-fail'
+                },
+            };
+
+            const isPending = e => e.status === 'queued' || e.status === 'processing';
+
+            function statusBadge(e) {
+                const s = STATUS[e.status];
+                return s ? `<span class="badge ${s.cls}">${s.label}</span>` : '';
             }
 
             function skeleton(rows = 3) {
@@ -335,17 +361,21 @@
             <div class="kb" data-idx="${i}">
               <div class="kb-head">
                 ${badge(e.source || 'manual')}
+                ${statusBadge(e)}
                 <input class="in kb-title" value="${escAttr(e.title || '')}" placeholder="Judul informasi">
                 <button class="del kb-del" title="Hapus" aria-label="Hapus informasi">&#10005;</button>
               </div>
               ${e.source === 'document' ? `<div class="muted small kb-meta">${escHtml(e.file_name || '')} · ${(e.content || '').length} karakter</div>` : ''}
+              ${e.status_message ? `<div class="small kb-note ${e.status === 'failed' ? 'bad' : ''}">${escHtml(e.status_message)}</div>` : ''}
               <div class="row"><span class="muted small">Akses:</span>
                 <select class="in kb-scope">
                   ${SCOPES.map(s => `<option value="${s.id}" ${e.scope === s.id ? 'selected' : ''}>${s.label}</option>`).join('')}
                 </select>
               </div>
-              <textarea class="in kb-content" rows="${e.source === 'document' ? 4 : 3}" placeholder="Isi informasi…">${escHtml(e.content || '')}</textarea>
-              <div class="row end"><button class="btn sm kb-save">Simpan</button></div>
+              ${isPending(e)
+                  ? `<div class="proc"><span class="spin"></span>Teks sedang diambil dari berkas — daftar ini menyegarkan sendiri.</div>`
+                  : `<textarea class="in kb-content" rows="${e.source === 'document' ? 4 : 3}" placeholder="${e.status === 'failed' ? 'Ekstraksi gagal — tempel teksnya di sini bila ingin tetap dipakai…' : 'Isi informasi…'}">${escHtml(e.content || '')}</textarea>
+                     <div class="row end"><button class="btn sm kb-save">Simpan</button></div>`}
             </div>`).join('');
             }
 
@@ -422,17 +452,60 @@
                         } catch (e) {}
                         throw new Error(m);
                     }
-                    let created = {};
-                    try {
-                        created = await res.json();
-                    } catch (e) {}
                     await loadKnowledge();
-                    // Berkas tetap tersimpan, tapi ada bagian yang mungkin belum terbaca.
-                    if (created.notice) toast(created.notice, false);
-                    else toast(`${file.name} ditambahkan · ${created.char_count ?? 0} karakter`);
+                    // Ekstraksi (dan OCR) berjalan di antrean — hasilnya menyusul.
+                    toast(`${file.name} diantrekan · teksnya diambil di latar belakang`);
+                    watchStatuses();
                 } catch (err) {
                     toast('Gagal unggah: ' + shorten(err.message), false);
                 }
+            }
+
+            // ---- Pemantauan status ekstraksi ----
+            // Entri hasil unggahan tidak langsung berisi: PDF pindai harus
+            // dirasterkan lalu di-OCR halaman per halaman. Selama masih ada yang
+            // berjalan, statusnya ditanyakan berkala sampai selesai/gagal.
+            let statusTimer = null;
+
+            function stopWatching() {
+                clearInterval(statusTimer);
+                statusTimer = null;
+            }
+
+            function watchStatuses() {
+                if (statusTimer) return;
+                statusTimer = setInterval(pollStatuses, 3000);
+            }
+
+            async function pollStatuses() {
+                let rows;
+                try {
+                    rows = await api(`${base}/documents/status`, {
+                        headers: ACCEPT
+                    });
+                } catch (e) {
+                    // Jangan membanjiri admin dengan galat jaringan berulang.
+                    stopWatching();
+                    return;
+                }
+
+                const known = new Map(KB.map(e => [e.id, e.status]));
+                const settled = rows.filter(r => known.has(r.id) && known.get(r.id) !== r.status &&
+                    !['queued', 'processing'].includes(r.status));
+
+                if (settled.length) {
+                    await loadKnowledge();
+                    settled.forEach(r => {
+                        const name = r.file_name || r.title;
+                        if (r.status === 'failed') toast(`${name}: ${shorten(r.status_message || 'ekstraksi gagal')}`, false);
+                        else toast(`${name} selesai diproses · ${r.char_count ?? 0} karakter`);
+                    });
+                } else if (rows.some(r => known.has(r.id) && known.get(r.id) !== r.status)) {
+                    // Perpindahan antre → diproses: cukup perbarui lencananya.
+                    await loadKnowledge();
+                }
+
+                if (!KB.some(isPending)) stopWatching();
             }
 
             // ---- Pratinjau ----

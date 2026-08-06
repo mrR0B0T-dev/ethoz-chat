@@ -40,6 +40,10 @@ Route::middleware('can:manage-chatbot')->prefix('admin/chatbot')->group(function
     Route::put('settings', [ChatbotSettingController::class, 'update'])->name('chatbot.settings.update');
     Route::get('preview', [ChatbotSettingController::class, 'preview'])->name('chatbot.settings.preview');
     Route::post('documents', [ChatbotDocumentController::class, 'store'])->name('chatbot.documents.store');
+
+    // Dipantau konsol selagi ada dokumen yang masih diekstrak/di-OCR.
+    Route::get('documents/status', [ChatbotDocumentController::class, 'status'])
+        ->name('chatbot.documents.status');
     Route::apiResource('knowledge', ChatbotKnowledgeController::class)
         ->only(['index', 'store', 'update', 'destroy']);
 

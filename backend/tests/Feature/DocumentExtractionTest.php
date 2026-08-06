@@ -2,13 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ExtractDocumentText;
 use App\Models\ChatbotKnowledge;
 use App\Models\User;
 use App\Services\ChatbotService;
 use App\Services\DocumentTextExtractor;
+use App\Services\OcrService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Mockery\MockInterface;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\Settings;
@@ -38,6 +43,71 @@ class DocumentExtractionTest extends TestCase
     protected function extractor(): DocumentTextExtractor
     {
         return app(DocumentTextExtractor::class);
+    }
+
+    /**
+     * Ganti Tesseract dengan tiruan: mesin pembangun tidak memasang binernya,
+     * dan yang diuji di sini adalah keputusan kapan OCR dipakai — bukan mutu
+     * pembacaan Tesseract itu sendiri.
+     *
+     * @param  array{image?: string, scannedPdf?: string}  $hasil
+     */
+    protected function fakeOcr(array $hasil = []): MockInterface
+    {
+        return $this->mock(OcrService::class, function (MockInterface $m) use ($hasil) {
+            $m->shouldReceive('enabled')->andReturnTrue();
+            $m->shouldReceive('available')->andReturnTrue();
+            $m->shouldReceive('canReadScannedPdf')->andReturnTrue();
+            $m->shouldReceive('unavailableReason')->andReturnNull();
+            $m->shouldReceive('image')->andReturn($hasil['image'] ?? '');
+
+            if (array_key_exists('scannedPdf', $hasil)) {
+                $m->shouldReceive('scannedPdf')->andReturn($hasil['scannedPdf']);
+            }
+        });
+    }
+
+    /**
+     * Tulis PDF satu halaman dengan lapisan teks seadanya.
+     *
+     * Teks kosong menghasilkan halaman tanpa lapisan teks sama sekali —
+     * persis seperti PDF keluaran mesin pemindai.
+     */
+    protected function makePdf(string $isi): string
+    {
+        $stream = $isi === '' ? '' : 'BT /F1 12 Tf 50 700 Td ('.$isi.') Tj ET';
+
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
+                .'/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+            4 => '<< /Length '.strlen($stream)." >>\nstream\n".$stream."\nendstream",
+            5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $n => $body) {
+            $offsets[$n] = strlen($pdf);
+            $pdf .= "$n 0 obj\n$body\nendobj\n";
+        }
+
+        $startxref = strlen($pdf);
+        $size = count($objects) + 1;
+
+        $pdf .= "xref\n0 $size\n0000000000 65535 f \n";
+        foreach ($objects as $n => $body) {
+            $pdf .= sprintf("%010d 00000 n \n", $offsets[$n]);
+        }
+        $pdf .= "trailer\n<< /Size $size /Root 1 0 R >>\nstartxref\n$startxref\n%%EOF\n";
+
+        $path = tempnam(sys_get_temp_dir(), 'scan').'.pdf';
+        file_put_contents($path, $pdf);
+        $this->temp[] = $path;
+
+        return $path;
     }
 
     /** Tulis DOCX sungguhan berisi memo dengan tabel, seperti dokumen HC nyata. */
@@ -112,11 +182,86 @@ class DocumentExtractionTest extends TestCase
 
         $this->actingAs($this->admin())
             ->post('/api/admin/chatbot/documents', ['file' => $upload, 'scope' => 'all'])
-            ->assertCreated();
+            ->assertAccepted();
 
         $entry = ChatbotKnowledge::firstOrFail();
         $this->assertStringContainsString('| Kepada | Seluruh Unit Kerja |', $entry->content);
         $this->assertSame('document', $entry->source);
+        $this->assertSame(ChatbotKnowledge::STATUS_DONE, $entry->status);
+    }
+
+    public function test_unggahan_diantrekan_dan_berkas_sementara_dibersihkan(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+
+        $this->actingAs($this->admin())
+            ->post('/api/admin/chatbot/documents', [
+                'file' => UploadedFile::fake()->createWithContent('sop.txt', 'Isi kebijakan.'),
+                'scope' => 'hr',
+            ])
+            ->assertAccepted()
+            ->assertJsonPath('status', ChatbotKnowledge::STATUS_QUEUED);
+
+        $entry = ChatbotKnowledge::firstOrFail();
+
+        // Permintaan HTTP tidak ikut menunggu ekstraksi — hanya mengantrekan.
+        Queue::assertPushed(ExtractDocumentText::class, function ($job) use ($entry) {
+            $this->assertSame($entry->id, $job->knowledgeId);
+            $this->assertSame('txt', $job->extension);
+            $this->assertTrue(Storage::disk('local')->exists($job->storedPath));
+
+            // Berkas dititipkan, lalu dihapus pekerjaan antrean setelah selesai.
+            $job->handle(app(DocumentTextExtractor::class));
+            $this->assertFalse(Storage::disk('local')->exists($job->storedPath));
+
+            return true;
+        });
+
+        $this->assertSame('Isi kebijakan.', $entry->fresh()->content);
+        $this->assertSame(ChatbotKnowledge::STATUS_DONE, $entry->fresh()->status);
+    }
+
+    public function test_pekerjaan_yang_gagal_menandai_entri_bukan_menggantung(): void
+    {
+        $entry = ChatbotKnowledge::create([
+            'title' => 'Pindaian Rapat',
+            'content' => '',
+            'scope' => 'all',
+            'source' => 'document',
+            'status' => ChatbotKnowledge::STATUS_QUEUED,
+        ]);
+
+        Storage::fake('local');
+        Storage::disk('local')->put('chatbot-documents/rapat.pdf', 'bukan pdf sungguhan');
+
+        (new ExtractDocumentText($entry->id, 'local', 'chatbot-documents/rapat.pdf', 'pdf', 'rapat.pdf'))
+            ->failed(new \RuntimeException('Tesseract mati di tengah jalan'));
+
+        $entry->refresh();
+        $this->assertSame(ChatbotKnowledge::STATUS_FAILED, $entry->status);
+        $this->assertStringContainsString('Ekstraksi gagal di server', $entry->status_message);
+        $this->assertFalse(Storage::disk('local')->exists('chatbot-documents/rapat.pdf'));
+    }
+
+    public function test_status_dokumen_bisa_dipantau_konsol(): void
+    {
+        ChatbotKnowledge::create([
+            'title' => 'Struktur Organisasi',
+            'content' => '',
+            'scope' => 'all',
+            'source' => 'document',
+            'file_name' => 'struktur.png',
+            'status' => ChatbotKnowledge::STATUS_PROCESSING,
+        ]);
+
+        $this->actingAs($this->admin())
+            ->getJson('/api/admin/chatbot/documents/status')
+            ->assertOk()
+            ->assertJsonPath('0.status', ChatbotKnowledge::STATUS_PROCESSING)
+            ->assertJsonPath('0.file_name', 'struktur.png')
+            // Isi dokumen bisa bermegabyte — pemantau tidak boleh ikut menyeretnya.
+            ->assertJsonMissingPath('0.content');
     }
 
     public function test_dokumen_besar_tersimpan_utuh_melewati_batas_text_lama(): void
@@ -130,7 +275,7 @@ class DocumentExtractionTest extends TestCase
 
         $this->actingAs($this->admin())
             ->post('/api/admin/chatbot/documents', ['file' => $upload, 'scope' => 'all'])
-            ->assertCreated();
+            ->assertAccepted();
 
         $entry = ChatbotKnowledge::firstOrFail();
         $this->assertSame(mb_strlen(trim($besar)), $entry->char_count);
@@ -162,7 +307,7 @@ class DocumentExtractionTest extends TestCase
         $this->assertSame(mb_strlen($panjang), mb_strlen($entry->fresh()->content));
     }
 
-    public function test_gambar_ditolak_dengan_alasan_yang_jelas_saat_ocr_mati(): void
+    public function test_gambar_ditandai_gagal_dengan_alasan_yang_jelas_saat_ocr_mati(): void
     {
         config(['chatbot.ocr.enabled' => false]);
 
@@ -170,10 +315,70 @@ class DocumentExtractionTest extends TestCase
 
         $this->actingAs($this->admin())
             ->post('/api/admin/chatbot/documents', ['file' => $upload, 'scope' => 'all'])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'OCR dimatikan lewat konfigurasi (OCR_ENABLED=false).');
+            ->assertAccepted();
 
-        $this->assertDatabaseCount('chatbot_knowledge', 0);
+        // Unggahannya tidak dibatalkan — admin melihat sebabnya pada entrinya.
+        $entry = ChatbotKnowledge::firstOrFail();
+        $this->assertSame(ChatbotKnowledge::STATUS_FAILED, $entry->status);
+        $this->assertSame('OCR dimatikan lewat konfigurasi (OCR_ENABLED=false).', $entry->status_message);
+    }
+
+    public function test_gambar_diunggah_masuk_basis_pengetahuan_lewat_ocr(): void
+    {
+        $this->fakeOcr(['image' => "STRUKTUR ORGANISASI\nDivisi Human Capital"]);
+
+        $this->actingAs($this->admin())
+            ->post('/api/admin/chatbot/documents', [
+                'file' => UploadedFile::fake()->image('struktur-organisasi.jpg', 800, 600),
+                'scope' => 'all',
+            ])
+            ->assertAccepted();
+
+        $entry = ChatbotKnowledge::firstOrFail();
+        $this->assertSame(ChatbotKnowledge::STATUS_DONE, $entry->status);
+        $this->assertStringContainsString('Divisi Human Capital', $entry->content);
+        // Tersimpan persis seperti dokumen lain — sumbernya tetap 'document'.
+        $this->assertSame('document', $entry->source);
+        $this->assertStringContainsString('OCR', (string) $entry->status_message);
+    }
+
+    public function test_pdf_dengan_lapisan_teks_tidak_di_ocr(): void
+    {
+        // Lapisan teks asli lebih cepat DAN lebih akurat daripada OCR, jadi
+        // selama ada, OCR tidak boleh dijalankan sama sekali.
+        $mock = $this->fakeOcr();
+        $mock->shouldReceive('scannedPdf')->never();
+
+        $isi = 'Kebijakan cuti tahunan berlaku bagi seluruh pegawai tetap. '
+            .'Pengajuan minimal tiga hari sebelumnya melalui atasan langsung.';
+
+        $text = $this->extractor()->extract($this->makePdf($isi), 'pdf');
+
+        $this->assertStringContainsString('Kebijakan cuti tahunan', $text);
+    }
+
+    public function test_pdf_hasil_pindai_jatuh_ke_ocr(): void
+    {
+        // Halaman tanpa lapisan teks — persis seperti PDF hasil pemindai.
+        $this->fakeOcr(['scannedPdf' => "[Halaman 1]\nSURAT EDARAN Nomor 012/HCM/IX/2026"]);
+
+        $text = $this->extractor()->extract($this->makePdf(''), 'pdf');
+
+        $this->assertStringContainsString('SURAT EDARAN Nomor 012/HCM/IX/2026', $text);
+    }
+
+    public function test_pdf_berteks_tipis_dilengkapi_hasil_ocr(): void
+    {
+        // Halaman pindai kerap menyisakan sedikit teks (nomor halaman, kop
+        // digital). Di bawah ambang, halaman dianggap tanpa lapisan teks —
+        // hasil OCR ditambahkan tanpa membuang teks aslinya.
+        config(['chatbot.ocr.min_chars_per_page' => 80]);
+        $this->fakeOcr(['scannedPdf' => "[Halaman 1]\nIsi lengkap hasil pemindaian."]);
+
+        $text = $this->extractor()->extract($this->makePdf('Halaman 1 dari 1'), 'pdf');
+
+        $this->assertStringContainsString('Halaman 1 dari 1', $text);
+        $this->assertStringContainsString('Isi lengkap hasil pemindaian.', $text);
     }
 
     public function test_berkas_non_utf8_dibaca_tanpa_karakter_rusak(): void

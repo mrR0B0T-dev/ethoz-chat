@@ -97,7 +97,9 @@ class ChatbotService
 
         $roleLabel = ['staff' => 'Staff/Pegawai', 'hr' => 'HC', 'manager' => 'Manager'][$role] ?? 'Pegawai';
 
-        $allowed = ChatbotKnowledge::where('is_active', true)->get()
+        // ready(): entri yang masih diantre/di-OCR belum punya isi, dan entri
+        // gagal hanya memuat alasan kegagalan — keduanya tidak boleh ikut.
+        $allowed = ChatbotKnowledge::ready()->get()
             ->filter(fn ($k) => $this->scopeAllows($k->scope, $role));
 
         [$kb, $sources, $matched] = $this->knowledgeFor($allowed, $question);

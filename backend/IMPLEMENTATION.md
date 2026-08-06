@@ -431,9 +431,13 @@ public function up(): void
 ### 9b. Dependensi ekstraksi
 
 ```bash
-composer require smalot/pdfparser   # PDF
-composer require phpoffice/phpword  # DOCX
+composer require smalot/pdfparser              # PDF ber-teks
+composer require phpoffice/phpword             # DOCX
+composer require thiagoalessio/tesseract_ocr   # OCR (pembungkus biner Tesseract)
 ```
+
+> `thiagoalessio/tesseract_ocr` **hanya pembungkus PHP**. Biner `tesseract`
+> beserta data bahasanya tetap harus dipasang di host — lihat di bawah.
 
 #### Kemampuan ekstraksi saat ini
 
@@ -443,36 +447,62 @@ composer require phpoffice/phpword  # DOCX
 | **Tabel Word** | ✅ | Ditulis sebagai `\| sel \| sel \|` agar hubungan antar kolom terbaca |
 | Kop & kaki halaman | ✅ | Kerap memuat nomor memo dan unit kerja |
 | Karakter khusus (`&`, `<`) | ✅ | Entitas XML dikembalikan ke bentuk aslinya |
-| PDF ber-teks | ✅ | Diberi penanda `[Halaman n]` |
-| **PDF hasil pindai / gambar** | ⚠️ | Perlu OCR — lihat di bawah |
+| PDF ber-teks | ✅ | Diberi penanda `[Halaman n]` — **tidak** di-OCR |
+| **PDF hasil pindai** | ✅ | Halaman dirasterkan lalu di-OCR satu per satu |
+| **Gambar (JPG/PNG/TIFF/BMP/WEBP)** | ✅ | Langsung di-OCR |
+| Gambar di dalam DOCX | ✅ | Bagan/tabel hasil tempel ikut di-OCR |
 | DOCX dengan XML tidak sah | ✅ | Ada jalur cadangan pembacaan XML mentah |
 | Berkas non-UTF-8 | ✅ | Dideteksi lalu dikonversi |
 
-#### Mengaktifkan OCR (teks di dalam gambar)
+#### Memasang OCR (teks di dalam gambar & PDF hasil pindai)
 
-Tanpa OCR, dokumen hasil pindai dan gambar ditolak dengan pesan yang menjelaskan
-sebabnya — bukan gagal diam-diam.
+Basis pengetahuan berbahasa Indonesia, jadi OCR dijalankan dengan `ind+eng` —
+data bahasa **`ind` dan `eng` dua-duanya wajib ada**. Tanpa data `ind`, angka
+dan huruf masih terbaca tetapi kata berimbuhan banyak yang meleset.
+
+**Linux (produksi):**
 
 ```bash
-# Windows
-winget install -e --id UB-Mannheim.TesseractOCR
-winget install -e --id oschwartz10612.Poppler   # pdftoppm, untuk PDF pindai
+sudo apt-get update
+sudo apt-get install -y tesseract-ocr tesseract-ocr-ind tesseract-ocr-eng \
+                        poppler-utils            # pdftoppm: PDF → gambar
+sudo apt-get install -y php-imagick ghostscript  # opsional: pra-pemrosesan + cadangan rasterisasi
 
-# Linux
-apt install tesseract-ocr tesseract-ocr-ind poppler-utils
+tesseract --list-langs                           # harus memuat: eng, ind
+```
+
+**Windows / Laragon (lokal):**
+
+```powershell
+winget install -e --id UB-Mannheim.TesseractOCR
+# Pada penginstal UB-Mannheim, buka "Additional language data" lalu centang
+# Indonesian. Bila terlanjur dilewati, unduh ind.traineddata dari
+# https://github.com/tesseract-ocr/tessdata dan salin ke:
+#   C:\Program Files\Tesseract-OCR\tessdata\
+
+winget install -e --id oschwartz10612.Poppler    # pdftoppm, untuk PDF pindai
+
+# Imagick (opsional, untuk pra-pemrosesan gambar): unduh DLL yang cocok dengan
+# PHP Laragon (versi + TS/NTS + x64), taruh php_imagick.dll di ext\, lalu
+# tambahkan extension=imagick pada php.ini.
 ```
 
 Bila binernya tidak berada di PATH, tunjuk langsung lewat `.env`:
 
 ```env
+OCR_ENABLED=true
 TESSERACT_PATH="C:\Program Files\Tesseract-OCR\tesseract.exe"
-PDFTOPPM_PATH="C:\poppler\bin\pdftoppm.exe"
+PDFTOPPM_PATH="C:\poppler\Library\bin\pdftoppm.exe"
 OCR_LANG=ind+eng
-OCR_MAX_PAGES=40
+OCR_MAX_PAGES=40          # batas halaman PDF yang di-OCR
+OCR_DPI=300               # resolusi rasterisasi
+OCR_MIN_CHARS_PER_PAGE=80 # ambang "PDF ini hasil pindai"
+OCR_PREPROCESS=true       # abu-abu + kontras + pelurusan sebelum OCR (butuh Imagick)
 ```
 
-Seluruh setelan lain ada di `config/chatbot.php` (batas unggahan, panjang teks,
-dan anggaran ukuran prompt).
+Tanpa Tesseract, dokumen ber-teks tetap terbaca seperti biasa; hanya berkas
+hasil pindai yang ditandai **gagal** beserta petunjuk pemasangannya — bukan
+gagal diam-diam. Seluruh setelan lain ada di `config/chatbot.php`.
 
 > **Penting:** perbaikan ekstraksi hanya berlaku saat dokumen **diunggah**.
 > Entri yang sudah tersimpan memuat hasil ekstraksi lama — berkas aslinya tidak
@@ -597,6 +627,61 @@ await fetch('/admin/chatbot/documents', {
 ```
 
 Setelah tersimpan, entri dokumen ikut terbaca oleh `ChatbotService::buildSystemPrompt()` yang sudah ada (karena mengambil dari tabel `chatbot_knowledge`) — tanpa perubahan lain.
+
+### 9g. Ekstraksi berjalan di antrean (OCR)
+
+OCR itu mahal: satu PDF pindai 40 halaman berarti 40 kali rasterisasi + 40 kali
+Tesseract — hitungan menit. Karena itu unggahan **tidak** lagi diekstrak di
+dalam permintaan HTTP.
+
+```
+POST /admin/chatbot/documents
+   │
+   ├─ berkas disimpan sementara (storage/app/private/chatbot-documents)
+   ├─ entri dibuat: status = queued          ──► 202 Accepted (langsung balik)
+   │
+   └─ ExtractDocumentText (queue)
+         status = processing
+         ├─ pdf   → smalot/pdfparser
+         │           └─ teks < OCR_MIN_CHARS_PER_PAGE per halaman?
+         │              └─ pdftoppm/Imagick → gambar → Tesseract per halaman
+         ├─ docx  → PhpWord (+ OCR gambar di dalamnya)
+         ├─ gambar→ Tesseract langsung
+         └─ txt/md/csv → apa adanya
+         │
+         ├─ ada teks   → status = done,   isi masuk basis pengetahuan
+         └─ tidak ada  → status = failed, alasannya tersimpan di status_message
+                          berkas sementara dihapus di kedua kasus
+```
+
+Kolom baru pada `chatbot_knowledge` (migrasi
+`add_processing_status_to_chatbot_knowledge`): `status` (`queued` `processing`
+`done` `failed`, bawaan `done` agar entri lama & manual tetap terhitung siap),
+`status_message`, dan `processed_at`.
+
+Hanya entri `done` yang boleh ikut ke prompt — lihat `ChatbotKnowledge::ready()`
+yang dipakai `ChatbotService`. Entri yang masih diproses belum punya isi, dan
+entri gagal hanya memuat alasan kegagalan; keduanya tidak boleh sampai ke model.
+
+**Wajib dijalankan di server:**
+
+```bash
+php artisan queue:work            # atau supervisor/systemd di produksi
+composer dev                      # lokal: server + queue + log + vite sekaligus
+```
+
+Tanpa worker, dokumen berhenti di status "Antre" — sengaja terlihat di konsol
+admin, bukan gagal diam-diam.
+
+Konsol admin (`chatbot.blade.php`) memantau lewat
+`GET /admin/chatbot/documents/status` selagi masih ada entri `queued`/
+`processing`, lalu menyegarkan daftarnya begitu status berubah. Entri gagal
+tetap bisa diselamatkan: admin menempel teksnya secara manual, dan entri itu
+otomatis kembali berstatus `done`.
+
+Setelan antreannya di `config/chatbot.php` → `extraction`
+(`CHATBOT_EXTRACT_QUEUE`, `CHATBOT_EXTRACT_TRIES`, `CHATBOT_EXTRACT_TIMEOUT`)
+dan `uploads` (`CHATBOT_UPLOAD_DISK`, `CHATBOT_UPLOAD_DIR`).
 
 ---
 

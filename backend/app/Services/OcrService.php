@@ -3,13 +3,16 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Exception\ProcessFailedException;
-use Symfony\Component\Process\Exception\RuntimeException;
-use Symfony\Component\Process\ExecutableFinder;
-use Symfony\Component\Process\Process;
+use thiagoalessio\TesseractOCR\TesseractOCR;
+use thiagoalessio\TesseractOCR\TesseractOcrException;
 
 /**
  * Pembaca teks di dalam gambar (Tesseract OCR).
+ *
+ * Pemanggilan binernya lewat paket thiagoalessio/tesseract_ocr; yang dipasang
+ * Composer hanya pembungkus PHP-nya — biner `tesseract` beserta data bahasa
+ * `ind` dan `eng` tetap harus terpasang di host. Lihat config/chatbot.php dan
+ * IMPLEMENTATION.md §9b untuk perintah pemasangannya (Windows & Linux).
  *
  * Seluruh kelas ini bersifat opsional: bila biner OCR tidak terpasang, setiap
  * metode mengembalikan string kosong dan alasannya bisa dibaca lewat
@@ -17,8 +20,11 @@ use Symfony\Component\Process\Process;
  */
 class OcrService
 {
-    /** @var array<string, ?string> Cache hasil pencarian biner per proses. */
-    protected array $binaries = [];
+    public function __construct(
+        protected BinaryLocator $binaries,
+        protected PdfRasterizer $rasterizer,
+        protected ImagePreprocessor $preprocessor,
+    ) {}
 
     public function enabled(): bool
     {
@@ -28,13 +34,13 @@ class OcrService
     /** OCR gambar siap pakai bila Tesseract tersedia. */
     public function available(): bool
     {
-        return $this->enabled() && $this->binary('tesseract') !== null;
+        return $this->enabled() && $this->tesseract() !== null;
     }
 
     /** OCR PDF hasil pindai juga butuh perasteran halaman. */
     public function canReadScannedPdf(): bool
     {
-        return $this->available() && ($this->binary('pdftoppm') !== null || extension_loaded('imagick'));
+        return $this->available() && $this->rasterizer->available();
     }
 
     /** Penjelasan singkat untuk ditampilkan ke admin saat OCR tidak bisa dipakai. */
@@ -44,12 +50,13 @@ class OcrService
             return 'OCR dimatikan lewat konfigurasi (OCR_ENABLED=false).';
         }
 
-        if ($this->binary('tesseract') === null) {
+        if ($this->tesseract() === null) {
             return 'Tesseract OCR belum terpasang di server, sehingga teks di dalam gambar tidak terbaca. '
-                .'Pasang lebih dulu (Windows: winget install -e --id UB-Mannheim.TesseractOCR).';
+                .'Pasang lebih dulu (Windows: winget install -e --id UB-Mannheim.TesseractOCR; '
+                .'Linux: apt-get install tesseract-ocr tesseract-ocr-ind).';
         }
 
-        if (! $this->canReadScannedPdf()) {
+        if (! $this->rasterizer->available()) {
             return 'Tesseract sudah ada, tetapi poppler (pdftoppm) atau ekstensi Imagick belum terpasang, '
                 .'sehingga halaman PDF hasil pindai tidak bisa diubah menjadi gambar untuk di-OCR.';
         }
@@ -57,36 +64,70 @@ class OcrService
         return null;
     }
 
-    /** Baca teks dari satu berkas gambar. */
-    public function image(string $path): string
+    /**
+     * Baca teks dari satu berkas gambar.
+     *
+     * @param  string|null  $workDir  Folder sementara untuk hasil pra-pemrosesan.
+     *                                Bila null, dibuat dan dibersihkan sendiri.
+     */
+    public function image(string $path, ?string $workDir = null): string
     {
         if (! $this->available()) {
             return '';
         }
 
-        try {
-            $process = new Process([
-                $this->binary('tesseract'),
-                $path,
-                'stdout',
-                '-l', (string) config('chatbot.ocr.lang'),
-                '--psm', '3',
-            ]);
-            $process->setTimeout((float) config('chatbot.ocr.timeout'));
-            $process->mustRun();
+        $ownDir = $workDir === null;
+        $workDir = $workDir ?? $this->tempDir();
+        $prepared = $path;
 
-            return $this->tidy($process->getOutput());
-        } catch (ProcessFailedException|RuntimeException $e) {
-            Log::warning('OCR: gagal membaca gambar.', ['path' => basename($path), 'error' => $e->getMessage()]);
+        try {
+            $prepared = $this->preprocessor->prepare($path, $workDir);
+
+            $ocr = (new TesseractOCR($prepared))
+                ->executable((string) $this->tesseract())
+                // Berkas antara Tesseract ikut ke folder kerja agar terhapus
+                // bersama sisanya, bukan menumpuk di folder temp sistem.
+                ->tempDir($workDir)
+                ->lang(...$this->languages())
+                ->psm((int) config('chatbot.ocr.psm'));
+
+            if ($dir = config('chatbot.ocr.tessdata_dir')) {
+                $ocr->tessdataDir((string) $dir);
+            }
+
+            return $this->tidy($ocr->run((int) config('chatbot.ocr.timeout')));
+        } catch (TesseractOcrException $e) {
+            // Termasuk halaman yang memang tidak memuat teks: paket ini
+            // menganggap keluaran kosong sebagai kegagalan perintah.
+            Log::warning('OCR: tidak ada teks yang terbaca dari gambar.', [
+                'file' => basename($path),
+                'error' => $this->firstLine($e->getMessage()),
+            ]);
 
             return '';
+        } catch (\Throwable $e) {
+            Log::error('OCR: gagal menjalankan Tesseract.', [
+                'file' => basename($path),
+                'error' => $e->getMessage(),
+            ]);
+
+            return '';
+        } finally {
+            // Hasil pra-pemrosesan langsung dibuang: PDF 40 halaman pada 300 DPI
+            // akan menumpuk ratusan MB bila ditahan sampai akhir dokumen.
+            if ($prepared !== $path) {
+                @unlink($prepared);
+            }
+
+            if ($ownDir) {
+                $this->cleanup($workDir);
+            }
         }
     }
 
     /**
-     * Baca teks dari PDF hasil pindai: halaman dirasterkan lalu di-OCR.
-     *
-     * @return string Teks per halaman, diberi penanda halaman.
+     * Baca teks dari PDF hasil pindai: tiap halaman dirasterkan lalu di-OCR,
+     * hasilnya digabung sesuai urutan halaman.
      */
     public function scannedPdf(string $path): string
     {
@@ -97,17 +138,29 @@ class OcrService
         $dir = $this->tempDir();
 
         try {
-            $images = $this->rasterize($path, $dir);
+            $images = $this->rasterizer->pages($path, $dir, (int) config('chatbot.ocr.max_pages'));
+
             if ($images === []) {
                 return '';
             }
 
             $pages = [];
+
             foreach ($images as $i => $image) {
-                $text = $this->image($image);
+                $text = $this->image($image, $dir);
                 if ($text !== '') {
                     $pages[] = '[Halaman '.($i + 1).']'.PHP_EOL.$text;
                 }
+                // Halaman yang sudah dibaca langsung dibuang: dokumen 40
+                // halaman pada 300 DPI bisa ratusan MB bila ditahan semua.
+                @unlink($image);
+            }
+
+            if ($pages === []) {
+                Log::warning('OCR: PDF berhasil dirasterkan tetapi tidak ada teks yang terbaca.', [
+                    'file' => basename($path),
+                    'halaman' => count($images),
+                ]);
             }
 
             return implode(PHP_EOL.PHP_EOL, $pages);
@@ -116,80 +169,17 @@ class OcrService
         }
     }
 
-    /**
-     * Ubah halaman PDF menjadi berkas PNG.
-     *
-     * @return list<string> Lintasan gambar, terurut per halaman.
-     */
-    protected function rasterize(string $pdf, string $dir): array
+    /** @return list<string> Bahasa Tesseract, mis. ['ind', 'eng']. */
+    protected function languages(): array
     {
-        $maxPages = max(1, (int) config('chatbot.ocr.max_pages'));
-        $dpi = (int) config('chatbot.ocr.dpi');
-        $prefix = $dir.DIRECTORY_SEPARATOR.'page';
+        $langs = array_filter(array_map('trim', explode('+', (string) config('chatbot.ocr.lang'))));
 
-        if ($this->binary('pdftoppm') !== null) {
-            try {
-                $process = new Process([
-                    $this->binary('pdftoppm'),
-                    '-png',
-                    '-r', (string) $dpi,
-                    '-f', '1',
-                    '-l', (string) $maxPages,
-                    $pdf,
-                    $prefix,
-                ]);
-                $process->setTimeout((float) config('chatbot.ocr.timeout') * 2);
-                $process->mustRun();
-            } catch (ProcessFailedException|RuntimeException $e) {
-                Log::warning('OCR: pdftoppm gagal merasterkan PDF.', ['error' => $e->getMessage()]);
-
-                return [];
-            }
-        } elseif (extension_loaded('imagick')) {
-            try {
-                /** @var \Imagick $im */
-                $im = new \Imagick;
-                $im->setResolution($dpi, $dpi);
-                $im->readImage($pdf);
-                $im->setImageFormat('png');
-
-                foreach ($im as $i => $page) {
-                    if ($i >= $maxPages) {
-                        break;
-                    }
-                    $page->writeImage(sprintf('%s-%03d.png', $prefix, $i + 1));
-                }
-                $im->clear();
-            } catch (\Throwable $e) {
-                Log::warning('OCR: Imagick gagal merasterkan PDF.', ['error' => $e->getMessage()]);
-
-                return [];
-            }
-        } else {
-            return [];
-        }
-
-        $files = glob($dir.DIRECTORY_SEPARATOR.'page*.png') ?: [];
-        sort($files, SORT_NATURAL);
-
-        return array_slice($files, 0, $maxPages);
+        return array_values($langs) ?: ['eng'];
     }
 
-    /** Cari biner sekali lalu ingat hasilnya. */
-    protected function binary(string $key): ?string
+    protected function tesseract(): ?string
     {
-        if (array_key_exists($key, $this->binaries)) {
-            return $this->binaries[$key];
-        }
-
-        $configured = (string) config("chatbot.ocr.$key");
-
-        // Lintasan absolut yang memang ada dipakai apa adanya.
-        if (is_file($configured) && is_executable($configured)) {
-            return $this->binaries[$key] = $configured;
-        }
-
-        return $this->binaries[$key] = (new ExecutableFinder)->find($configured);
+        return $this->binaries->find((string) config('chatbot.ocr.tesseract'));
     }
 
     protected function tempDir(): string
@@ -206,6 +196,12 @@ class OcrService
             @unlink($file);
         }
         @rmdir($dir);
+    }
+
+    /** Pesan galat paket OCR panjang (memuat perintah + $PATH) — cukup barisnya. */
+    protected function firstLine(string $message): string
+    {
+        return trim(strtok($message, "\n") ?: $message);
     }
 
     /** Rapikan keluaran OCR yang kerap penuh spasi dan baris kosong berlebih. */

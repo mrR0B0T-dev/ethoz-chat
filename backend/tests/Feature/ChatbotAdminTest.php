@@ -142,36 +142,72 @@ class ChatbotAdminTest extends TestCase
     {
         $isi = "Kebijakan Cuti\nPengajuan cuti minimal 3 hari sebelumnya.";
 
+        // 202, bukan 201: ekstraksi berjalan di antrean (OCR bisa lama).
+        // Pada pengujian antreannya 'sync', jadi hasilnya langsung ada.
         $this->actingAs($this->admin())
             ->post('/api/admin/chatbot/documents', [
                 'file' => UploadedFile::fake()->createWithContent('kebijakan-cuti.txt', $isi),
                 'scope' => 'all',
             ])
-            ->assertCreated()
+            ->assertAccepted()
             ->assertJson([
                 'title' => 'kebijakan-cuti',
-                'content' => $isi,
                 'scope' => 'all',
                 'source' => 'document',
                 'file_name' => 'kebijakan-cuti.txt',
-                'char_count' => mb_strlen($isi),
                 'is_active' => true,
             ]);
 
         $this->assertDatabaseCount('chatbot_knowledge', 1);
+
+        $entry = ChatbotKnowledge::firstOrFail();
+        $this->assertSame(ChatbotKnowledge::STATUS_DONE, $entry->status);
+        $this->assertSame($isi, $entry->content);
+        $this->assertSame(mb_strlen($isi), $entry->char_count);
     }
 
-    public function test_unggah_dokumen_kosong_ditolak(): void
+    public function test_unggah_dokumen_kosong_ditandai_gagal_beserta_alasannya(): void
     {
+        // Unggahannya tidak dibatalkan: entrinya tetap ada agar admin melihat
+        // apa yang terjadi pada berkas itu — bukan gagal tanpa jejak.
         $this->actingAs($this->admin())
             ->post('/api/admin/chatbot/documents', [
                 'file' => UploadedFile::fake()->createWithContent('kosong.txt', '   '),
                 'scope' => 'all',
             ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Tidak ada teks yang bisa dibaca dari berkas ini.');
+            ->assertAccepted();
 
-        $this->assertDatabaseCount('chatbot_knowledge', 0);
+        $entry = ChatbotKnowledge::firstOrFail();
+        $this->assertSame(ChatbotKnowledge::STATUS_FAILED, $entry->status);
+        $this->assertSame('Tidak ada teks yang bisa dibaca dari berkas ini.', $entry->status_message);
+        $this->assertSame('', $entry->content);
+    }
+
+    public function test_entri_yang_belum_selesai_tidak_ikut_ke_system_prompt(): void
+    {
+        ChatbotKnowledge::create([
+            'title' => 'Panduan Lembur',
+            'content' => '',
+            'scope' => 'all',
+            'source' => 'document',
+            'status' => ChatbotKnowledge::STATUS_QUEUED,
+        ]);
+
+        ChatbotKnowledge::create([
+            'title' => 'Pindaian Rusak',
+            'content' => '',
+            'scope' => 'all',
+            'source' => 'document',
+            'status' => ChatbotKnowledge::STATUS_FAILED,
+            'status_message' => 'Tidak ada teks yang terbaca di dalam gambar ini.',
+        ]);
+
+        $prompt = app(ChatbotService::class)
+            ->buildSystemPrompt(User::factory()->create(['role' => 'staff']));
+
+        $this->assertStringNotContainsString('Panduan Lembur', $prompt);
+        // Alasan kegagalan untuk admin, bukan bahan jawaban bot.
+        $this->assertStringNotContainsString('Tidak ada teks yang terbaca', $prompt);
     }
 
     public function test_unggah_menolak_tipe_berkas_lain(): void
@@ -193,7 +229,7 @@ class ChatbotAdminTest extends TestCase
                 'file' => UploadedFile::fake()->createWithContent('sop-lembur.txt', 'Lembur wajib disetujui manager.'),
                 'scope' => 'all',
             ])
-            ->assertCreated();
+            ->assertAccepted();
 
         $prompt = app(ChatbotService::class)
             ->buildSystemPrompt(User::factory()->create(['role' => 'staff']));

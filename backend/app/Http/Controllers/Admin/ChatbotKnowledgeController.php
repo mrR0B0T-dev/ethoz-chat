@@ -22,7 +22,18 @@ class ChatbotKnowledgeController extends Controller
 
     public function update(Request $r, ChatbotKnowledge $knowledge)
     {
-        $knowledge->update($this->rules($r));
+        $data = $this->rules($r);
+
+        // Admin menyunting isinya sendiri (mis. menempel teks dokumen yang
+        // gagal di-OCR) — entri itu kembali siap dipakai bot.
+        if ($knowledge->status !== ChatbotKnowledge::STATUS_DONE) {
+            $data['status'] = ChatbotKnowledge::STATUS_DONE;
+            $data['status_message'] = null;
+        }
+
+        $data['char_count'] = mb_strlen($data['content']);
+
+        $knowledge->update($data);
 
         return $knowledge;
     }

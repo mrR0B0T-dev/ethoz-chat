@@ -19,17 +19,55 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Berkas unggahan & antrean ekstraksi
+    |--------------------------------------------------------------------------
+    |
+    | Ekstraksi (terutama OCR PDF hasil pindai) bisa berjalan menit-menitan,
+    | jadi berkasnya disimpan lebih dulu lalu diproses oleh queue worker —
+    | permintaan HTTP tidak ikut menunggu. Berkas dihapus setelah selesai.
+    |
+    | Jalankan worker-nya: `php artisan queue:work` (lihat IMPLEMENTATION.md §9g).
+    |
+    */
+
+    'uploads' => [
+        // Cakram penyimpanan sementara. Bawaan 'local' = storage/app/private.
+        'disk' => env('CHATBOT_UPLOAD_DISK', 'local'),
+
+        'directory' => env('CHATBOT_UPLOAD_DIR', 'chatbot-documents'),
+    ],
+
+    'extraction' => [
+        // Antrean khusus agar unggahan besar tidak menahan pekerjaan lain.
+        'queue' => env('CHATBOT_EXTRACT_QUEUE', 'default'),
+
+        // Berapa kali pekerjaan diulang bila gagal karena hal sementara.
+        'tries' => (int) env('CHATBOT_EXTRACT_TRIES', 2),
+
+        // Batas waktu satu pekerjaan (detik). PDF pindai tebal butuh lama.
+        'timeout' => (int) env('CHATBOT_EXTRACT_TIMEOUT', 1800),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | OCR (teks di dalam gambar / PDF hasil pindai)
     |--------------------------------------------------------------------------
     |
-    | OCR memakai Tesseract. Bila binernya tidak terpasang, ekstraksi tetap
-    | berjalan untuk dokumen ber-teks dan OCR dilewati dengan pesan yang jelas.
+    | OCR memakai Tesseract lewat pembungkus thiagoalessio/tesseract_ocr. Yang
+    | dipasang lewat Composer hanya pembungkusnya — biner `tesseract` beserta
+    | data bahasanya tetap harus ada di host:
     |
     |   Windows : winget install -e --id UB-Mannheim.TesseractOCR
-    |   Linux   : apt install tesseract-ocr tesseract-ocr-ind poppler-utils
+    |             (centang "Additional language data" → Indonesian, atau salin
+    |              ind.traineddata ke C:\Program Files\Tesseract-OCR\tessdata)
+    |   Linux   : apt-get install -y tesseract-ocr tesseract-ocr-ind \
+    |                                tesseract-ocr-eng poppler-utils
     |
-    | `pdftoppm` (poppler) dipakai untuk mengubah halaman PDF hasil pindai
-    | menjadi gambar sebelum di-OCR. Alternatifnya ekstensi Imagick.
+    | Basis pengetahuan berbahasa Indonesia, jadi OCR dijalankan dengan
+    | 'ind+eng' — data bahasa `ind` DAN `eng` keduanya wajib terpasang.
+    |
+    | Bila binernya tidak terpasang, ekstraksi tetap berjalan untuk dokumen
+    | ber-teks dan OCR dilewati dengan pesan yang jelas ke admin.
     |
     */
 
@@ -42,6 +80,16 @@ return [
         // Bahasa Tesseract. 'ind+eng' menangani dokumen campuran.
         'lang' => env('OCR_LANG', 'ind+eng'),
 
+        // Folder tessdata non-standar (mis. pemasangan portabel). Kosong = bawaan.
+        'tessdata_dir' => env('OCR_TESSDATA_DIR'),
+
+        /*
+         | Tata letak halaman Tesseract (--psm). 3 = deteksi otomatis penuh,
+         | cocok untuk memo/surat. 6 dipakai bila halaman berupa satu blok
+         | teks rata, 4 untuk kolom.
+         */
+        'psm' => (int) env('OCR_PSM', 3),
+
         // Batas halaman PDF yang di-OCR — mencegah proses berjalan sangat lama.
         'max_pages' => (int) env('OCR_MAX_PAGES', 40),
 
@@ -52,11 +100,41 @@ return [
         'dpi' => (int) env('OCR_DPI', 300),
 
         /*
+         | Cara halaman PDF diubah menjadi gambar sebelum di-OCR:
+         |   auto     — pdftoppm bila ada, selain itu Imagick (butuh Ghostscript)
+         |   pdftoppm — paksa poppler
+         |   imagick  — paksa ekstensi Imagick
+         */
+        'pdf_driver' => env('OCR_PDF_DRIVER', 'auto'),
+
+        /*
          | Ambang "PDF ini kemungkinan hasil pindai": bila rata-rata karakter
          | per halaman di bawah angka ini, halaman dianggap tanpa lapisan teks
          | sehingga OCR dijalankan sebagai cadangan.
          */
         'min_chars_per_page' => (int) env('OCR_MIN_CHARS_PER_PAGE', 80),
+
+        /*
+         | Pra-pemrosesan gambar sebelum OCR (butuh ekstensi Imagick).
+         | Hasil pindai kantor kerap miring, redup, dan berbayang — tiga
+         | langkah di bawah ini yang paling berpengaruh pada akurasi.
+         | Matikan bila sumbernya sudah bersih atau Imagick tidak tersedia.
+         */
+        'preprocess' => [
+            'enabled' => (bool) env('OCR_PREPROCESS', true),
+
+            // Warna tidak membantu OCR, tetapi menambah derau.
+            'grayscale' => (bool) env('OCR_PREPROCESS_GRAYSCALE', true),
+
+            // Regangkan kontras: pindaian redup jadi tegas.
+            'normalize' => (bool) env('OCR_PREPROCESS_NORMALIZE', true),
+
+            // Luruskan halaman miring. Persen ambang; 0 = mati.
+            'deskew' => (float) env('OCR_PREPROCESS_DESKEW', 40),
+
+            // Ambang hitam-putih. Persen; 0 = mati (biarkan abu-abu).
+            'threshold' => (float) env('OCR_PREPROCESS_THRESHOLD', 55),
+        ],
     ],
 
     /*

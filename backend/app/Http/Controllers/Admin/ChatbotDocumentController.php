@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ExtractDocumentText;
 use App\Models\ChatbotKnowledge;
 use App\Services\DocumentTextExtractor;
 use Illuminate\Http\Request;
@@ -10,7 +11,15 @@ use Illuminate\Support\Facades\Log;
 
 class ChatbotDocumentController extends Controller
 {
-    public function store(Request $r, DocumentTextExtractor $extractor)
+    /**
+     * Terima berkas, simpan sementara, lalu antrekan ekstraksinya.
+     *
+     * Ekstraksi tidak lagi dikerjakan di sini: PDF hasil pindai harus
+     * dirasterkan lalu di-OCR halaman demi halaman — hitungan menit, terlalu
+     * lama untuk ditunggu peramban. Yang dikembalikan adalah entri berstatus
+     * "queued"; konsol admin memantau sisanya lewat endpoint status().
+     */
+    public function store(Request $r)
     {
         $r->validate([
             'file' => [
@@ -24,56 +33,59 @@ class ChatbotDocumentController extends Controller
         ]);
 
         $file = $r->file('file');
+        $disk = (string) config('chatbot.uploads.disk');
 
-        // Dokumen besar butuh waktu lebih (rasterisasi halaman + OCR).
-        @set_time_limit(0);
+        // Berkas asli tidak ikut disimpan permanen — hanya dititipkan sampai
+        // teksnya diambil, lalu dihapus oleh pekerjaan antrean.
+        $stored = $file->store((string) config('chatbot.uploads.directory'), $disk);
 
-        $text = trim($extractor->extract($file->getRealPath(), $file->getClientOriginalExtension()));
-
-        if ($text === '') {
-            // Sampaikan sebab yang sebenarnya, bukan tebakan umum.
-            $reason = $extractor->notice() ?? 'Tidak ada teks yang bisa dibaca dari berkas ini.';
-
-            Log::info('Unggah dokumen: tidak ada teks terbaca.', [
+        if ($stored === false) {
+            Log::error('Unggah dokumen: berkas gagal disimpan ke penyimpanan sementara.', [
                 'file' => $file->getClientOriginalName(),
-                'reason' => $reason,
+                'disk' => $disk,
             ]);
 
-            return response()->json(['message' => $reason], 422);
-        }
-
-        $max = (int) config('chatbot.content_max_chars');
-        $truncated = mb_strlen($text) > $max;
-
-        if ($truncated) {
-            $text = mb_substr($text, 0, $max);
-
-            Log::warning('Unggah dokumen: teks dipotong pada batas konfigurasi.', [
-                'file' => $file->getClientOriginalName(),
-                'limit' => $max,
-            ]);
+            return response()->json([
+                'message' => 'Berkas gagal disimpan di server. Coba lagi atau hubungi pengelola sistem.',
+            ], 500);
         }
 
         $entry = ChatbotKnowledge::create([
             'title' => $r->title ?: pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),
-            'content' => $text,
+            'content' => '',
             'scope' => $r->scope,
             'source' => 'document',
             'file_name' => $file->getClientOriginalName(),
-            'char_count' => mb_strlen($text),
+            'char_count' => 0,
             'is_active' => true,
+            'status' => ChatbotKnowledge::STATUS_QUEUED,
+            'status_message' => 'Menunggu giliran diproses.',
         ]);
 
-        // Catatan tambahan (mis. OCR belum terpasang padahal berkas memuat
-        // gambar) ikut dikirim agar admin tahu ada bagian yang mungkin terlewat.
-        $payload = $entry->toArray();
+        ExtractDocumentText::dispatch(
+            $entry->id,
+            $disk,
+            $stored,
+            strtolower((string) $file->getClientOriginalExtension()),
+            $file->getClientOriginalName(),
+        );
 
-        if ($truncated) {
-            $payload['notice'] = 'Dokumen sangat panjang dan dipotong pada '.number_format($max).' karakter.';
-        } elseif ($note = $extractor->notice()) {
-            $payload['notice'] = $note;
-        }
+        // 202: diterima, hasilnya belum ada. Entri sudah terlihat di daftar
+        // dengan statusnya, jadi admin tidak menunggu tanpa kabar.
+        return response()->json($entry->refresh(), 202);
+    }
 
-        return response()->json($payload, 201);
+    /**
+     * Status ringkas seluruh entri hasil unggahan — dipanggil berkala oleh
+     * konsol selagi ada dokumen yang belum selesai.
+     *
+     * Sengaja tanpa kolom `content`: daftar pengetahuan bisa berukuran
+     * megabyte, sedangkan yang dibutuhkan pemantau hanya statusnya.
+     */
+    public function status()
+    {
+        return ChatbotKnowledge::where('source', 'document')
+            ->latest()
+            ->get(['id', 'title', 'file_name', 'status', 'status_message', 'char_count']);
     }
 }
